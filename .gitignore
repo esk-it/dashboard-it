@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+*.pyo
+*.pdb
+*.egg-info/
+dist/
+build/
+
+# Virtual env
+.venv/
+venv/
+
+# VS Code
+.vscode/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# DB locale (IMPORTANT)
+dashboard.db
+*.sqlite
+*.sqlite3
+
+# PyInstaller
+*.spec
+
+# Cache/tools
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
