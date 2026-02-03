@@ -6,8 +6,9 @@ from PySide6.QtWidgets import (
     QLabel, QPushButton, QStackedWidget, QLineEdit, QFrame, QGridLayout
 )
 
-from core.db import TaskRepository
+from core.db import TaskRepository, SupplierRepository
 from ui.pages.tasks import TasksPage
+from ui.pages.suppliers import SuppliersPage
 
 
 QSS = """
@@ -184,22 +185,25 @@ QListWidget::item:focus {
     background-color: #0F1A33;
 }
 
-#DelBtn:hover { border: 1px solid #2D6CDF; }
-
 #DelBtn:hover {
     background-color: #0B1322;
     border: 1px solid #2D6CDF;
 }
 #CardTitle { font-size: 13pt; font-weight: 800; }
 
-#TaskRow {
-    background-color: #0F1625;
-    border: 1px solid #1B263A;
-    border-radius: 14px;
+/* ---- FIX: remove dark "textbox" behind text inside rows ---- */
+#TaskRow QLabel {
+    background: transparent;
+    border: none;
+    padding: 0px;
+    margin: 0px;
 }
-#TaskRow[hover="true"] {
-    border: 1px solid #22324D;
-    background-color: #0E172A;
+
+#TaskTitle, #TaskMeta {
+    background: transparent;
+    border: none;
+    padding: 0px;
+    margin: 0px;
 }
 
 
@@ -468,6 +472,7 @@ class MainWindow(QMainWindow):
         # DB (fichier dans le dossier du projet)
         db_path = Path(__file__).parent / "dashboard.db"
         self.repo = TaskRepository(db_path)
+        self.sup_repo = SupplierRepository(db_path)
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -504,9 +509,14 @@ class MainWindow(QMainWindow):
         self.btn_tools.setProperty("class", "NavButton")
         self.btn_tools.setProperty("active", False)
 
-        for b in (self.btn_home, self.btn_tasks, self.btn_tools):
+        self.btn_suppliers = QPushButton("📇  Prestataires")
+        self.btn_suppliers.setProperty("class", "NavButton")
+        self.btn_suppliers.setProperty("active", False)
+
+        for b in (self.btn_home, self.btn_tasks, self.btn_suppliers, self.btn_tools):
             b.setCursor(Qt.PointingHandCursor)
             sb.addWidget(b)
+
 
         sb.addStretch(1)
 
@@ -528,6 +538,7 @@ class MainWindow(QMainWindow):
         top.addWidget(search, 0)
 
         self.pages = QStackedWidget()
+        self.page_suppliers = SuppliersPage(self.sup_repo)
         self.page_home = HomePage(self.repo, on_add_task=self._add_task_from_home)
         self.page_tasks = TasksPage(self.repo)
         placeholder_tools = Card("Outils", "Page à venir : ping/dns/ports + boutons scripts.")
@@ -539,7 +550,8 @@ class MainWindow(QMainWindow):
 
         self.pages.addWidget(self.page_home)      # 0
         self.pages.addWidget(self.page_tasks)     # 1
-        self.pages.addWidget(container_tools)     # 2
+        self.pages.addWidget(self.page_suppliers) # 2
+        self.pages.addWidget(container_tools)     # 3
 
         main_layout.addLayout(top)
         main_layout.addWidget(self.pages, 1)
@@ -549,9 +561,11 @@ class MainWindow(QMainWindow):
 
         self.btn_home.clicked.connect(lambda: self.go(0, "Accueil", self.btn_home))
         self.btn_tasks.clicked.connect(lambda: self.go(1, "Tâches", self.btn_tasks))
-        self.btn_tools.clicked.connect(lambda: self.go(2, "Outils", self.btn_tools))
+        self.btn_suppliers.clicked.connect(lambda: self.go(2, "Prestataires", self.btn_suppliers))
+        self.btn_tools.clicked.connect(lambda: self.go(3, "Outils", self.btn_tools))
+        
 
-        self._nav_buttons = [self.btn_home, self.btn_tasks, self.btn_tools]
+        self._nav_buttons = [self.btn_home, self.btn_tasks, self.btn_suppliers, self.btn_tools]
 
     def go(self, index: int, title: str, active_btn: QPushButton):
         self.pages.setCurrentIndex(index)

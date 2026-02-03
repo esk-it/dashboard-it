@@ -34,3 +34,6 @@ dashboard.db
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+
+# Supplier logos (local assets)
+logos/
