@@ -1,23 +1,23 @@
-# core/db.py
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional
 
 
-# -----------------------------
+# =========================
 # Tasks
-# -----------------------------
+# =========================
 @dataclass(frozen=True)
 class Task:
     id: int
     title: str
     category: str
-    priority: int
-    due_date: Optional[str]
+    priority: int              # 1..3
+    due_date: Optional[str]    # "YYYY-MM-DD" or None
     done: bool
-    created_at: str
+    created_at: str            # ISO string
+    notes: str                 # commentaires / détails
 
 
 class TaskRepository:
@@ -48,7 +48,19 @@ class TaskRepository:
             con.execute("CREATE INDEX IF NOT EXISTS idx_tasks_done ON tasks(done);")
             con.execute("CREATE INDEX IF NOT EXISTS idx_tasks_due ON tasks(due_date);")
 
-    def add_task(self, title: str, category: str = "", priority: int = 2, due_date: Optional[str] = None) -> int:
+            # migration: notes
+            cols = {r["name"] for r in con.execute("PRAGMA table_info(tasks)").fetchall()}
+            if "notes" not in cols:
+                con.execute("ALTER TABLE tasks ADD COLUMN notes TEXT NOT NULL DEFAULT ''")
+
+    def add_task(
+        self,
+        title: str,
+        category: str = "",
+        priority: int = 2,
+        due_date: Optional[str] = None,
+        notes: str = "",
+    ) -> int:
         title = title.strip()
         if not title:
             raise ValueError("title is empty")
@@ -57,14 +69,14 @@ class TaskRepository:
         with self._connect() as con:
             cur = con.execute(
                 """
-                INSERT INTO tasks(title, category, priority, due_date, done, created_at)
-                VALUES (?, ?, ?, ?, 0, ?)
+                INSERT INTO tasks(title, category, priority, due_date, done, created_at, notes)
+                VALUES (?, ?, ?, ?, 0, ?, ?)
                 """,
-                (title, category.strip(), int(priority), due_date, created_at),
+                (title, (category or "").strip(), int(priority), due_date, created_at, (notes or "").strip()),
             )
             return int(cur.lastrowid)
 
-    def list_tasks(self, status: str = "all", search: str = "") -> List[Task]:
+    def list_tasks(self, status: str = "all", search: str = "") -> list[Task]:
         where = []
         params: list = []
 
@@ -75,19 +87,20 @@ class TaskRepository:
 
         s = search.strip()
         if s:
-            where.append("(title LIKE ? OR category LIKE ?)")
+            where.append("(title LIKE ? OR category LIKE ? OR notes LIKE ?)")
             like = f"%{s}%"
-            params += [like, like]
+            params += [like, like, like]
 
         where_sql = ("WHERE " + " AND ".join(where)) if where else ""
         sql = f"""
-            SELECT id, title, category, priority, due_date, done, created_at
+            SELECT id, title, category, priority, due_date, done, created_at, notes
             FROM tasks
             {where_sql}
             ORDER BY
                 done ASC,
                 CASE WHEN due_date IS NULL THEN 1 ELSE 0 END ASC,
                 due_date ASC,
+                priority DESC,
                 created_at DESC;
         """
 
@@ -103,6 +116,7 @@ class TaskRepository:
                 due_date=r["due_date"],
                 done=bool(r["done"]),
                 created_at=str(r["created_at"]),
+                notes=str(r["notes"] or ""),
             )
             for r in rows
         ]
@@ -117,7 +131,7 @@ class TaskRepository:
         with self._connect() as con:
             rows = con.execute(
                 """
-                SELECT id, title, category, priority, due_date, done, created_at
+                SELECT id, title, category, priority, due_date, done, created_at, notes
                 FROM tasks
                 WHERE done = 0
                 ORDER BY
@@ -139,6 +153,7 @@ class TaskRepository:
                 due_date=r["due_date"],
                 done=bool(r["done"]),
                 created_at=str(r["created_at"]),
+                notes=str(r["notes"] or ""),
             )
             for r in rows
         ]
