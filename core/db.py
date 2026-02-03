@@ -3,7 +3,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List
-
+from dataclasses import dataclass
+from typing import Optional
 
 @dataclass(frozen=True)
 class Task:
@@ -187,3 +188,118 @@ def top_open_tasks(self, limit: int = 5) -> list[Task]:
         )
         for r in rows
     ]
+@dataclass(frozen=True)
+class Supplier:
+    id: int
+    name: str
+    domain: str
+    phone: str
+    email: str
+    contact: str
+    notes: str
+    created_at: str
+
+
+class SupplierRepository:
+    def __init__(self, db_path: str | Path):
+        self.db_path = str(db_path)
+        self._init_db()
+
+    def _connect(self) -> sqlite3.Connection:
+        con = sqlite3.connect(self.db_path)
+        con.row_factory = sqlite3.Row
+        return con
+
+    def _init_db(self) -> None:
+        with self._connect() as con:
+            con.execute(
+                """
+                CREATE TABLE IF NOT EXISTS suppliers (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    domain TEXT NOT NULL DEFAULT '',
+                    phone TEXT NOT NULL DEFAULT '',
+                    email TEXT NOT NULL DEFAULT '',
+                    contact TEXT NOT NULL DEFAULT '',
+                    notes TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL
+                );
+                """
+            )
+            con.execute("CREATE INDEX IF NOT EXISTS idx_suppliers_name ON suppliers(name);")
+            con.execute("CREATE INDEX IF NOT EXISTS idx_suppliers_domain ON suppliers(domain);")
+
+    def add_supplier(
+        self,
+        name: str,
+        domain: str = "",
+        phone: str = "",
+        email: str = "",
+        contact: str = "",
+        notes: str = "",
+    ) -> int:
+        name = name.strip()
+        if not name:
+            raise ValueError("name is empty")
+
+        created_at = datetime.now().isoformat(timespec="seconds")
+        with self._connect() as con:
+            cur = con.execute(
+                """
+                INSERT INTO suppliers(name, domain, phone, email, contact, notes, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (name, domain.strip(), phone.strip(), email.strip(), contact.strip(), notes.strip(), created_at),
+            )
+            return int(cur.lastrowid)
+
+    def delete_supplier(self, supplier_id: int) -> None:
+        with self._connect() as con:
+            con.execute("DELETE FROM suppliers WHERE id = ?", (int(supplier_id),))
+
+    def list_suppliers(self, search: str = "", domain: str = "") -> list[Supplier]:
+        where = []
+        params: list = []
+
+        s = search.strip()
+        if s:
+            where.append("(name LIKE ? OR domain LIKE ? OR phone LIKE ? OR email LIKE ? OR contact LIKE ? OR notes LIKE ?)")
+            like = f"%{s}%"
+            params += [like, like, like, like, like, like]
+
+        d = domain.strip()
+        if d and d != "Tous":
+            where.append("domain = ?")
+            params.append(d)
+
+        where_sql = ("WHERE " + " AND ".join(where)) if where else ""
+        sql = f"""
+            SELECT id, name, domain, phone, email, contact, notes, created_at
+            FROM suppliers
+            {where_sql}
+            ORDER BY name COLLATE NOCASE ASC, created_at DESC
+        """
+
+        with self._connect() as con:
+            rows = con.execute(sql, params).fetchall()
+
+        return [
+            Supplier(
+                id=int(r["id"]),
+                name=str(r["name"]),
+                domain=str(r["domain"] or ""),
+                phone=str(r["phone"] or ""),
+                email=str(r["email"] or ""),
+                contact=str(r["contact"] or ""),
+                notes=str(r["notes"] or ""),
+                created_at=str(r["created_at"]),
+            )
+            for r in rows
+        ]
+
+    def list_domains(self) -> list[str]:
+        with self._connect() as con:
+            rows = con.execute(
+                "SELECT DISTINCT domain FROM suppliers WHERE domain IS NOT NULL AND domain != '' ORDER BY domain COLLATE NOCASE"
+            ).fetchall()
+        return [str(r["domain"]) for r in rows]

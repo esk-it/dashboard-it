@@ -185,22 +185,25 @@ QListWidget::item:focus {
     background-color: #0F1A33;
 }
 
-#DelBtn:hover { border: 1px solid #2D6CDF; }
-
 #DelBtn:hover {
     background-color: #0B1322;
     border: 1px solid #2D6CDF;
 }
 #CardTitle { font-size: 13pt; font-weight: 800; }
 
-#TaskRow {
-    background-color: #0F1625;
-    border: 1px solid #1B263A;
-    border-radius: 14px;
+/* ---- FIX: remove dark "textbox" behind text inside rows ---- */
+#TaskRow QLabel {
+    background: transparent;
+    border: none;
+    padding: 0px;
+    margin: 0px;
 }
-#TaskRow[hover="true"] {
-    border: 1px solid #22324D;
-    background-color: #0E172A;
+
+#TaskTitle, #TaskMeta {
+    background: transparent;
+    border: none;
+    padding: 0px;
+    margin: 0px;
 }
 
 
