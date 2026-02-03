@@ -541,6 +541,7 @@ class MainWindow(QMainWindow):
         self.page_suppliers = SuppliersPage(self.sup_repo)
         self.page_home = HomePage(self.repo, on_add_task=self._add_task_from_home)
         self.page_tasks = TasksPage(self.repo)
+        self.page_tasks.changed.connect(self.page_home.refresh)
         placeholder_tools = Card("Outils", "Page à venir : ping/dns/ports + boutons scripts.")
 
         container_tools = QWidget()
