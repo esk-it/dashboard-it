@@ -1,0 +1,5 @@
+{
+  "enabled": false,
+  "gateway_url": "ws://localhost:7171",
+  "token_endpoint": "/jet/rdp"
+}

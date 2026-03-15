@@ -1,0 +1,22 @@
+[
+  {
+    "name": "CERT-FR Alertes",
+    "url": "https://www.cert.ssi.gouv.fr/feed/",
+    "enabled": true
+  },
+  {
+    "name": "IT-Connect",
+    "url": "https://www.it-connect.fr/feed/",
+    "enabled": true
+  },
+  {
+    "name": "01net",
+    "url": "https://www.01net.com/rss/",
+    "enabled": true
+  },
+  {
+    "name": "Journal du Net",
+    "url": "https://www.journaldunet.com/rss/",
+    "enabled": true
+  }
+]

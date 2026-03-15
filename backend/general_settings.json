@@ -1,0 +1,64 @@
+{
+  "username": "Johann",
+  "auto_refresh_minutes": 1,
+  "max_home_tasks": 5,
+  "language": "fr",
+  "enabled_modules": {
+    "tasks": true,
+    "documents": true,
+    "suppliers": true,
+    "parc": true,
+    "security": true,
+    "tools": true,
+    "news": true,
+    "planning": true
+  },
+  "card_order": [
+    [
+      "week_progress"
+    ],
+    [
+      "priority",
+      "sysmon"
+    ],
+    [
+      "quicklinks"
+    ],
+    [
+      "planning"
+    ],
+    [
+      "activity"
+    ],
+    [
+      "chart_gauge",
+      "chart_sparkline",
+      "chart_donut"
+    ]
+  ],
+  "card_layout": [
+    [
+      "week_progress"
+    ],
+    [
+      "priority",
+      "sysmon"
+    ],
+    [
+      "quicklinks"
+    ],
+    [
+      "planning"
+    ],
+    [
+      "activity"
+    ],
+    [
+      "chart_gauge",
+      "chart_sparkline",
+      "chart_donut"
+    ]
+  ],
+  "show_alert_ws": true,
+  "show_alert_warranty": true
+}
