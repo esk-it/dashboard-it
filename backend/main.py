@@ -1,20 +1,26 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from .database import init_db
 from .routers import dashboard, tasks, settings, search, planning, documents, changelog, wiki, news, suppliers, parc, security, bastion, tools
 
-app = FastAPI(title="ITManager Dashboard API")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Create all tables on startup (handles fresh installs)."""
+    await init_db()
+    yield
+
+
+app = FastAPI(title="ITManager Dashboard API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:1420",
-        "tauri://localhost",
-        "https://tauri.localhost",
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
