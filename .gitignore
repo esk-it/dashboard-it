@@ -23,3 +23,10 @@ dist-ssr
 *.sln
 *.sw?
 src-tauri/keys/updater.key
+
+# PyInstaller
+dist/
+build/
+
+# Tauri sidecar binary (rebuilt by CI)
+src-tauri/binaries/*.exe
