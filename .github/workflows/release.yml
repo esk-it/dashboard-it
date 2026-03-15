@@ -44,9 +44,10 @@ jobs:
       - name: Build backend with PyInstaller
         run: pyinstaller --noconfirm backend.spec
 
-      - name: Copy backend binary to Tauri sidecar location
+      - name: Create sidecar directory and copy backend binary
         run: |
-          Copy-Item "dist\backend\backend.exe" "src-tauri\binaries\backend-x86_64-pc-windows-msvc.exe" -Force
+          New-Item -ItemType Directory -Path "src-tauri\binaries" -Force
+          Copy-Item "dist\backend.exe" "src-tauri\binaries\backend-x86_64-pc-windows-msvc.exe" -Force
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
