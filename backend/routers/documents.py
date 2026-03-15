@@ -9,9 +9,14 @@ from typing import List
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, Response
 
+import os
+
 from ..database import get_raw_db
 
-VAULT_ROOT = Path(__file__).parent.parent / "data" / "documents"
+if os.environ.get("ITMANAGER_DATA_DIR"):
+    VAULT_ROOT = Path(os.environ["ITMANAGER_DATA_DIR"]) / "data" / "documents"
+else:
+    VAULT_ROOT = Path(__file__).parent.parent / "data" / "documents"
 VAULT_ROOT.mkdir(parents=True, exist_ok=True)
 
 ALLOWED_EXT = {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",

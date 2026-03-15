@@ -17,9 +17,14 @@ from ..schemas.supplier import (
     SupplierUpdate,
 )
 
+import os
+
 router = APIRouter(prefix="/api/suppliers", tags=["suppliers"])
 
-LOGO_DIR = Path(__file__).parent.parent / "data" / "logos"
+if os.environ.get("ITMANAGER_DATA_DIR"):
+    LOGO_DIR = Path(os.environ["ITMANAGER_DATA_DIR"]) / "data" / "logos"
+else:
+    LOGO_DIR = Path(__file__).parent.parent / "data" / "logos"
 LOGO_DIR.mkdir(parents=True, exist_ok=True)
 
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"}

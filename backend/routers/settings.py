@@ -20,7 +20,10 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 
 from ..database import BASE_DIR, DB_PATH
 
-BACKEND_DIR = Path(__file__).resolve().parent.parent
+if os.environ.get("ITMANAGER_DATA_DIR"):
+    BACKEND_DIR = Path(os.environ["ITMANAGER_DATA_DIR"])
+else:
+    BACKEND_DIR = Path(__file__).resolve().parent.parent
 OLD_PROJECT_DIR = Path(r"C:\Users\jdeniel\Documents\Projets\Dashboard - claude code")
 BACKUP_DIR = BASE_DIR / "backups"
 BACKUP_DIR.mkdir(exist_ok=True)

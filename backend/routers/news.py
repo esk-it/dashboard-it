@@ -10,7 +10,12 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/news", tags=["news"])
 
-BACKEND_DIR = Path(__file__).resolve().parent.parent
+import os
+
+if os.environ.get("ITMANAGER_DATA_DIR"):
+    BACKEND_DIR = Path(os.environ["ITMANAGER_DATA_DIR"])
+else:
+    BACKEND_DIR = Path(__file__).resolve().parent.parent
 RSS_FILE = BACKEND_DIR / "rss_feeds.json"
 
 DEFAULT_FEEDS = [

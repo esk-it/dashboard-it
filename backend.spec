@@ -83,6 +83,9 @@ a = Analysis(
         'backend.schemas.supplier',
         'backend.schemas.task',
         'backend.schemas.wiki',
+        # RSS feeds
+        'feedparser',
+        'sgmllib',
         # Paramiko for SSH
         'paramiko',
         # System info

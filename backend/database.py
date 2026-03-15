@@ -372,4 +372,48 @@ async def init_db():
     for stmt in statements:
         await db.execute(stmt)
     await db.commit()
+
+    # --- Insert default data if tables are empty ---
+    await _seed_defaults(db)
+
+    await db.commit()
     await db.close()
+
+
+async def _seed_defaults(db):
+    """Insert default data into empty tables (first launch only)."""
+
+    # Default task categories
+    row = await db.execute("SELECT COUNT(*) FROM task_categories")
+    count = (await row.fetchone())[0]
+    if count == 0:
+        categories = [
+            "Administration", "Réseau", "Pédagogique",
+            "Sécurité", "Serveurs", "Maintenance", "Support",
+        ]
+        for i, name in enumerate(categories):
+            await db.execute(
+                "INSERT INTO task_categories (name, sort_order) VALUES (?, ?)",
+                (name, 100),
+            )
+
+    # Default supplier domains
+    row = await db.execute("SELECT COUNT(*) FROM supplier_domains")
+    count = (await row.fetchone())[0]
+    if count == 0:
+        domains = [
+            ("Réseau",        "#2D6CDF", "fa5s.network-wired",  10),
+            ("Wi-Fi",         "#FF55FF", "fa5s.wifi",           20),
+            ("Fibre/Internet","#55007F", "fa5s.project-diagram",30),
+            ("Téléphonie",    "#00FF00", "fa5s.phone",          40),
+            ("Imprimantes",   "#AA5500", "fa5s.print",          50),
+            ("Sécurité",      "#EF4444", "fa5s.shield-alt",     60),
+            ("Support",       "#FF5500", "fa5s.tools",          70),
+            ("Logiciels",     "#22C55E", "fa5s.puzzle-piece",   80),
+            ("Matériel",      "#AAB3C5", "fa5s.toolbox",        90),
+        ]
+        for name, color, icon, order in domains:
+            await db.execute(
+                "INSERT INTO supplier_domains (name, color_hex, icon_key, sort_order, color, icon) VALUES (?, ?, ?, ?, ?, ?)",
+                (name, color, icon, order, color, icon),
+            )
