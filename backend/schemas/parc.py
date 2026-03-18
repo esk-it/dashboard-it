@@ -21,6 +21,9 @@ class EquipmentCreate(BaseModel):
     notes: str = ""
     warranty_end: Optional[str] = None
     purchase_date: Optional[str] = None
+    glpi_id: Optional[int] = None
+    glpi_location: str = ""
+    last_user: str = ""
 
 
 class EquipmentUpdate(EquipmentCreate):
@@ -48,6 +51,9 @@ class EquipmentResponse(BaseModel):
     manual_location: str
     created_at: str
     updated_at: str
+    glpi_id: Optional[int] = None
+    glpi_location: str = ""
+    last_user: str = ""
     # Joined names (filled by router)
     site_name: str = ""
     building_name: str = ""

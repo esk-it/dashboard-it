@@ -17,7 +17,7 @@
   import SuppliersPage from './lib/pages/SuppliersPage.svelte';
   import ParcPage from './lib/pages/ParcPage.svelte';
   import SecurityPage from './lib/pages/SecurityPage.svelte';
-  import BastionPage from './lib/pages/BastionPage.svelte';
+  import MonitoringPage from './lib/pages/MonitoringPage.svelte';
   import ToolsPage from './lib/pages/ToolsPage.svelte';
   import SettingsPage from './lib/pages/SettingsPage.svelte';
 
@@ -63,8 +63,8 @@
     <WikiPage />
   {:else if $currentPage === '/changelog'}
     <ChangelogPage />
-  {:else if $currentPage === '/bastion'}
-    <BastionPage />
+  {:else if $currentPage === '/monitoring'}
+    <MonitoringPage />
   {:else if $currentPage === '/tools'}
     <ToolsPage />
   {:else if $currentPage === '/settings'}

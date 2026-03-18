@@ -46,6 +46,12 @@
   let resetConfirmText = '';
   let resetting = false;
 
+  // GLPI integration
+  let glpiConfig = null;
+  let glpiForm = { url: '', app_token: '', user_token: '' };
+  let glpiSaving = false;
+  let glpiStats = null;
+
   // Status
   let saved = false;
   let saveTimer = null;
@@ -286,7 +292,55 @@
     navigator.clipboard.writeText(text);
   }
 
+  // ── GLPI ─────────────────────────────────────────────
+  const GLPI_API = 'http://localhost:8010/api/glpi';
+
+  async function loadGlpiConfig() {
+    try {
+      const res = await fetch(`${GLPI_API}/config`);
+      const cfg = await res.json();
+      glpiConfig = cfg.configured ? cfg : null;
+      if (glpiConfig) {
+        const st = await fetch(`${GLPI_API}/stats`);
+        glpiStats = await st.json();
+      } else {
+        glpiStats = null;
+      }
+    } catch (e) {
+      glpiConfig = null;
+    }
+  }
+
+  async function saveGlpiConfig() {
+    if (!glpiForm.url || !glpiForm.app_token || !glpiForm.user_token) return;
+    glpiSaving = true;
+    try {
+      await fetch(`${GLPI_API}/config`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(glpiForm),
+      });
+      showSaved();
+      await loadGlpiConfig();
+      glpiForm = { url: '', app_token: '', user_token: '' };
+    } catch (e) {
+      console.error('GLPI config save failed:', e);
+    }
+    glpiSaving = false;
+  }
+
+  async function deleteGlpiConfig() {
+    try {
+      await fetch(`${GLPI_API}/config`, { method: 'DELETE' });
+      glpiConfig = null;
+      glpiStats = null;
+      glpiForm = { url: '', app_token: '', user_token: '' };
+      showSaved();
+    } catch (e) {}
+  }
+
   // Load DB info & backups when switching to those panels
+  $: if (activePanel === 2) loadGlpiConfig();
   $: if (activePanel === 3) loadDbInfo();
   $: if (activePanel === 5) loadBackups();
 
@@ -533,9 +587,67 @@
               <span class="int-icon">{'\u{1F4BB}'}</span>
               <div class="int-info">
                 <h3>GLPI</h3>
-                <p>Inventaire du parc informatique (bient{'\u00f4'}t disponible)</p>
+                <p>Inventaire du parc informatique via l'API REST GLPI</p>
               </div>
-              <span class="int-badge soon">Bient{'\u00f4'}t</span>
+              <span class="int-badge" class:active-badge={glpiConfig} class:soon={!glpiConfig}>
+                {glpiConfig ? 'Actif' : 'Non configur\u00e9'}
+              </span>
+            </div>
+            <div class="gw-config-form">
+              {#if glpiConfig}
+                <div class="gw-status-grid">
+                  <div class="gw-status-item">
+                    <span>{'\u2705'}</span>
+                    <span>URL : {glpiConfig.url}</span>
+                  </div>
+                  <div class="gw-status-item">
+                    <span>{'\u{1F511}'}</span>
+                    <span>App-Token : {glpiConfig.app_token}</span>
+                  </div>
+                  <div class="gw-status-item">
+                    <span>{'\u{1F464}'}</span>
+                    <span>User-Token : {glpiConfig.user_token}</span>
+                  </div>
+                  {#if glpiStats}
+                    <div class="gw-status-item">
+                      <span>{'\u{1F4E6}'}</span>
+                      <span>{glpiStats.total_items} {'\u00e9'}l{'\u00e9'}ments ({glpiStats.computers} PC, {glpiStats.monitors} moniteurs, {glpiStats.printers} imprimantes)</span>
+                    </div>
+                    {#if glpiStats.last_sync}
+                      <div class="gw-status-item">
+                        <span>{'\u{1F552}'}</span>
+                        <span>Derni{'\u00e8'}re sync : {new Date(glpiStats.last_sync).toLocaleString('fr-FR')}</span>
+                      </div>
+                    {/if}
+                  {/if}
+                </div>
+                <div style="display:flex;gap:8px;margin-top:8px">
+                  <button class="btn-danger" on:click={deleteGlpiConfig} style="font-size:0.75rem;padding:4px 10px">
+                    Supprimer la configuration
+                  </button>
+                </div>
+              {/if}
+              <div class="glpi-form">
+                <p class="gw-help" style="margin-bottom:8px">
+                  {glpiConfig ? 'Modifier la configuration :' : 'Entrez vos identifiants GLPI pour activer la synchronisation :'}
+                </p>
+                <div class="glpi-fields">
+                  <input type="text" bind:value={glpiForm.url}
+                    placeholder={glpiConfig ? glpiConfig.url : 'https://glpi.mondomaine.fr'}
+                    class="glpi-input" />
+                  <input type="text" bind:value={glpiForm.app_token}
+                    placeholder={glpiConfig ? glpiConfig.app_token : 'App-Token'}
+                    class="glpi-input" />
+                  <input type="text" bind:value={glpiForm.user_token}
+                    placeholder={glpiConfig ? glpiConfig.user_token : 'User-Token'}
+                    class="glpi-input" />
+                  <button class="btn-small" style="background:var(--accent,#06A6C9);color:#fff;font-weight:600"
+                    on:click={saveGlpiConfig}
+                    disabled={(!glpiForm.url || !glpiForm.app_token || !glpiForm.user_token) || glpiSaving}>
+                    {glpiSaving ? '\u23F3...' : 'Enregistrer'}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -584,7 +696,7 @@
           <div class="int-note">
             <p>{'\u{1F4A1}'} Les imports Active Directory ont {'\u00e9'}t{'\u00e9'} remplac{'\u00e9'}s par :</p>
             <ul>
-              <li><strong>GLPI</strong> pour l'inventaire du parc (en cours d'int{'\u00e9'}gration)</li>
+              <li><strong>GLPI</strong> pour l'inventaire du parc (synchronisation depuis le module Parc)</li>
               <li><strong>Croisement Parc {'\u00D7'} WithSecure</strong> pour d{'\u00e9'}tecter les postes sans agent de protection</li>
             </ul>
           </div>
@@ -1193,6 +1305,25 @@
   }
   .int-badge.soon { background: rgba(245,158,11,0.15); color: #F59E0B; }
   .int-badge.active-badge { background: rgba(16,185,129,0.15); color: #10B981; }
+
+  .glpi-form { margin-top: 10px; }
+  .glpi-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .glpi-input {
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--border-subtle, rgba(255,255,255,0.06));
+    border-radius: 6px;
+    padding: 7px 10px;
+    color: var(--text, #E6EAF2);
+    font-size: 0.8rem;
+    outline: none;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .glpi-input:focus { border-color: var(--accent, #06A6C9); }
 
   .gw-config-form {
     margin-top: 12px;

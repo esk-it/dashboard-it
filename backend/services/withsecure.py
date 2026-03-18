@@ -6,6 +6,7 @@ Config (client_id, client_secret) is stored in backend/data/withsecure_config.js
 """
 from __future__ import annotations
 
+import base64
 import json
 import logging
 from datetime import datetime
@@ -65,16 +66,23 @@ def get_masked_config() -> dict | None:
 # ── OAuth2 token ──────────────────────────────────────────────
 
 async def _get_token(client_id: str, client_secret: str) -> str:
-    """Obtain OAuth2 access token using client credentials grant."""
+    """Obtain OAuth2 access token using client credentials grant.
+
+    WithSecure requires Basic Auth header (base64 of client_id:secret)
+    plus grant_type + scope in the form body.
+    """
+    credentials = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.post(
             TOKEN_URL,
             data={
                 "grant_type": "client_credentials",
-                "client_id": client_id,
-                "client_secret": client_secret,
+                "scope": "connect.api.read",
             },
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Authorization": f"Basic {credentials}",
+            },
         )
         resp.raise_for_status()
         return resp.json()["access_token"]

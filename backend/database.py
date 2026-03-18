@@ -162,7 +162,8 @@ async def init_db():
             pinned     INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
-            source_path TEXT NOT NULL DEFAULT ''
+            source_path TEXT NOT NULL DEFAULT '',
+            content_format TEXT NOT NULL DEFAULT 'html'
         )""",
         """CREATE TABLE IF NOT EXISTS wiki_categories (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -373,11 +374,40 @@ async def init_db():
         await db.execute(stmt)
     await db.commit()
 
+    # --- Migrations for existing databases ---
+    await _run_migrations(db)
+    await db.commit()
+
     # --- Insert default data if tables are empty ---
     await _seed_defaults(db)
 
     await db.commit()
     await db.close()
+
+
+async def _run_migrations(db):
+    """Apply schema migrations for existing databases."""
+    # Check if content_format column exists in wiki_articles
+    cursor = await db.execute("PRAGMA table_info(wiki_articles)")
+    columns = [row[1] for row in await cursor.fetchall()]
+    if "content_format" not in columns:
+        await db.execute(
+            "ALTER TABLE wiki_articles ADD COLUMN content_format TEXT NOT NULL DEFAULT 'html'"
+        )
+
+    # GLPI integration columns on parc_equipment
+    cursor = await db.execute("PRAGMA table_info(parc_equipment)")
+    parc_cols = [row[1] for row in await cursor.fetchall()]
+    if "glpi_id" not in parc_cols:
+        await db.execute("ALTER TABLE parc_equipment ADD COLUMN glpi_id INTEGER")
+    if "glpi_location" not in parc_cols:
+        await db.execute(
+            "ALTER TABLE parc_equipment ADD COLUMN glpi_location TEXT NOT NULL DEFAULT ''"
+        )
+    if "last_user" not in parc_cols:
+        await db.execute(
+            "ALTER TABLE parc_equipment ADD COLUMN last_user TEXT NOT NULL DEFAULT ''"
+        )
 
 
 async def _seed_defaults(db):

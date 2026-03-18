@@ -39,7 +39,8 @@ async def list_articles(
     db=Depends(get_raw_db),
 ):
     query = """SELECT id, title, COALESCE(category,''), pinned,
-                      COALESCE(tags,''), COALESCE(updated_at,'')
+                      COALESCE(tags,''), COALESCE(updated_at,''),
+                      COALESCE(content_format,'html')
                FROM wiki_articles
                WHERE 1=1"""
     params: list = []
@@ -62,7 +63,7 @@ async def list_articles(
     return [
         WikiArticleListResponse(
             id=r[0], title=r[1], category=r[2], pinned=bool(r[3]),
-            tags=r[4], updated_at=r[5],
+            tags=r[4], updated_at=r[5], content_format=r[6],
         )
         for r in rows
     ]
@@ -73,7 +74,8 @@ async def get_article(article_id: int, db=Depends(get_raw_db)):
     rows = await db.execute_fetchall(
         """SELECT id, title, COALESCE(category,''), COALESCE(content,''),
                   COALESCE(tags,''), pinned, COALESCE(created_at,''),
-                  COALESCE(updated_at,''), COALESCE(source_path,'')
+                  COALESCE(updated_at,''), COALESCE(source_path,''),
+                  COALESCE(content_format,'html')
            FROM wiki_articles WHERE id = ?""",
         (article_id,),
     )
@@ -83,6 +85,7 @@ async def get_article(article_id: int, db=Depends(get_raw_db)):
     return WikiArticleResponse(
         id=r[0], title=r[1], category=r[2], content=r[3], tags=r[4],
         pinned=bool(r[5]), created_at=r[6], updated_at=r[7], source_path=r[8],
+        content_format=r[9],
     )
 
 
@@ -90,8 +93,8 @@ async def get_article(article_id: int, db=Depends(get_raw_db)):
 async def create_article(body: WikiArticleCreate, db=Depends(get_raw_db)):
     now = datetime.now().isoformat(timespec="seconds")
     cursor = await db.execute(
-        """INSERT INTO wiki_articles (title, category, content, tags, pinned, created_at, updated_at, source_path)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        """INSERT INTO wiki_articles (title, category, content, tags, pinned, created_at, updated_at, source_path, content_format)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             body.title,
             body.category,
@@ -101,6 +104,7 @@ async def create_article(body: WikiArticleCreate, db=Depends(get_raw_db)):
             now,
             now,
             body.source_path,
+            body.content_format,
         ),
     )
     await db.commit()
@@ -116,7 +120,7 @@ async def update_article(article_id: int, body: WikiArticleUpdate, db=Depends(ge
 
     now = datetime.now().isoformat(timespec="seconds")
     await db.execute(
-        """UPDATE wiki_articles SET title=?, category=?, content=?, tags=?, pinned=?, updated_at=?, source_path=?
+        """UPDATE wiki_articles SET title=?, category=?, content=?, tags=?, pinned=?, updated_at=?, source_path=?, content_format=?
            WHERE id=?""",
         (
             body.title,
@@ -126,6 +130,7 @@ async def update_article(article_id: int, body: WikiArticleUpdate, db=Depends(ge
             1 if body.pinned else 0,
             now,
             body.source_path,
+            body.content_format,
             article_id,
         ),
     )

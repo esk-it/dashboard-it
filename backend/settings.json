@@ -1,19 +1,5 @@
 {
   "theme": "glass",
   "accent": "#06A6C9",
-  "brand_icon": "⚡",
-  "splash_settings": {
-    "glass": {
-      "splash_bg": "#0D1528",
-      "splash_accent": "#06A6C9"
-    },
-    "glass_light": {
-      "splash_bg": "#DCE8F8",
-      "splash_accent": "#06A6C9"
-    },
-    "custom": {
-      "splash_bg": "#0D1528",
-      "splash_accent": "#06A6C9"
-    }
-  }
+  "brand_icon": "⚡"
 }

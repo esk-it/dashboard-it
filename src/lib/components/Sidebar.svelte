@@ -71,7 +71,7 @@
       <!-- Version -->
       <div class="version">
         {#if hovered}
-          <span>v2.1</span>
+          <span>v2.3</span>
         {:else}
           <span class="version-dot"></span>
         {/if}

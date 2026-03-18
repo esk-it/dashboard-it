@@ -34,6 +34,7 @@ _EQ_COLS = """
     COALESCE(e.last_seen_ad,''), e.warranty_end, e.purchase_date,
     COALESCE(e.notes,''), COALESCE(e.manual_location,''),
     COALESCE(e.created_at,''), COALESCE(e.updated_at,''),
+    e.glpi_id, COALESCE(e.glpi_location,''), COALESCE(e.last_user,''),
     COALESCE(s.name,''), COALESCE(b.name,''), COALESCE(r.name,'')
 """
 
@@ -54,7 +55,8 @@ def _row_to_equipment(r) -> dict:
         last_seen_ad=r[13], warranty_end=r[14], purchase_date=r[15],
         notes=r[16], manual_location=str(r[17]) if r[17] is not None else "",
         created_at=r[18], updated_at=r[19],
-        site_name=r[20], building_name=r[21], room_name=r[22],
+        glpi_id=r[20], glpi_location=r[21], last_user=r[22],
+        site_name=r[23], building_name=r[24], room_name=r[25],
     )
 
 
@@ -190,6 +192,14 @@ async def audit_no_site(db=Depends(get_raw_db)):
     return [EquipmentResponse(**_row_to_equipment(r)) for r in rows]
 
 
+@router.get("/audit/no-building", response_model=list[EquipmentResponse])
+async def audit_no_building(db=Depends(get_raw_db)):
+    rows = await db.execute_fetchall(
+        f"SELECT {_EQ_COLS} {_EQ_FROM} WHERE e.building_id IS NULL ORDER BY e.hostname"
+    )
+    return [EquipmentResponse(**_row_to_equipment(r)) for r in rows]
+
+
 @router.get("/audit/no-room", response_model=list[EquipmentResponse])
 async def audit_no_room(db=Depends(get_raw_db)):
     rows = await db.execute_fetchall(
@@ -198,24 +208,18 @@ async def audit_no_room(db=Depends(get_raw_db)):
     return [EquipmentResponse(**_row_to_equipment(r)) for r in rows]
 
 
-@router.get("/audit/stale-ad", response_model=list[EquipmentResponse])
-async def audit_stale_ad(db=Depends(get_raw_db)):
+@router.get("/audit/no-os", response_model=list[EquipmentResponse])
+async def audit_no_os(db=Depends(get_raw_db)):
     rows = await db.execute_fetchall(
-        f"""SELECT {_EQ_COLS} {_EQ_FROM}
-            WHERE e.last_seen_ad != '' AND e.last_seen_ad IS NOT NULL
-            AND date(e.last_seen_ad) < date('now', '-30 days')
-            ORDER BY e.last_seen_ad ASC"""
+        f"SELECT {_EQ_COLS} {_EQ_FROM} WHERE (e.os IS NULL OR e.os = '') ORDER BY e.hostname"
     )
     return [EquipmentResponse(**_row_to_equipment(r)) for r in rows]
 
 
-@router.get("/audit/warranty", response_model=list[EquipmentResponse])
-async def audit_warranty(db=Depends(get_raw_db)):
+@router.get("/audit/no-user", response_model=list[EquipmentResponse])
+async def audit_no_user(db=Depends(get_raw_db)):
     rows = await db.execute_fetchall(
-        f"""SELECT {_EQ_COLS} {_EQ_FROM}
-            WHERE e.warranty_end IS NOT NULL AND e.warranty_end != ''
-            AND date(e.warranty_end) < date('now', '+6 months')
-            ORDER BY e.warranty_end ASC"""
+        f"SELECT {_EQ_COLS} {_EQ_FROM} WHERE (e.last_user IS NULL OR e.last_user = '') ORDER BY e.hostname"
     )
     return [EquipmentResponse(**_row_to_equipment(r)) for r in rows]
 

@@ -18,7 +18,7 @@ from fastapi.responses import StreamingResponse
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
-from ..database import BASE_DIR, DB_PATH
+from ..database import BASE_DIR, DB_PATH, init_db
 
 if os.environ.get("ITMANAGER_DATA_DIR"):
     BACKEND_DIR = Path(os.environ["ITMANAGER_DATA_DIR"])
@@ -368,13 +368,31 @@ async def reset_data(payload: dict = Body(...)):
         if RSS_FILE.exists():
             zf.write(RSS_FILE, "rss_feeds.json")
 
-    # Delete DB
-    if DB_PATH.exists():
-        DB_PATH.unlink()
+    # Truncate all tables (keep schema intact)
+    import aiosqlite
+    db = await aiosqlite.connect(str(DB_PATH))
+    try:
+        cursor = await db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+        tables = [row[0] for row in await cursor.fetchall()]
+        for table in tables:
+            await db.execute(f"DELETE FROM [{table}]")
+        await db.commit()
+    finally:
+        await db.close()
+
+    # Re-run init_db to recreate default data (seeds)
+    await init_db()
 
     # Reset settings to defaults
     _write_json(GENERAL_FILE, GENERAL_DEFAULTS)
     _write_json(THEME_FILE, THEME_DEFAULTS)
     _write_json(RSS_FILE, RSS_DEFAULTS)
+
+    # Also clear GLPI/WithSecure caches
+    data_dir = Path(__file__).resolve().parent.parent / "data"
+    for cache_file in ["glpi_cache.json", "glpi_config.json", "ws_cache.json", "ws_config.json"]:
+        p = data_dir / cache_file
+        if p.exists():
+            p.unlink()
 
     return {"ok": True, "message": f"Donn\u00e9es r\u00e9initialis\u00e9es. Backup de s\u00e9curit\u00e9 cr\u00e9\u00e9: {zip_path.name}"}

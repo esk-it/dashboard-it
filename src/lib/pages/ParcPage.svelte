@@ -28,9 +28,10 @@
 
   // Audit data
   let auditNoSite = [];
+  let auditNoBuilding = [];
   let auditNoRoom = [];
-  let auditStaleAd = [];
-  let auditWarranty = [];
+  let auditNoOs = [];
+  let auditNoUser = [];
   let auditLoaded = false;
 
   // Equipment dialog
@@ -42,6 +43,11 @@
   // Delete
   let confirmDelete = null;
   let deleting = false;
+
+  // GLPI integration
+  let glpiConfig = null;
+  let glpiSyncing = false;
+  let glpiStats = null;
 
   // Derived
   $: typeList = [...new Set(equipment.map(e => e.equip_type).filter(Boolean))].sort();
@@ -77,7 +83,7 @@
   }
 
   // ── Load ───────────────────────────────────────────────────
-  onMount(() => { loadAll(); });
+  onMount(() => { loadAll(); loadGlpiConfig(); });
 
   async function loadAll() {
     loading = true;
@@ -110,16 +116,18 @@
 
   async function loadAudit() {
     try {
-      const [ns, nr, sa, wa] = await Promise.all([
+      const [ns, nb, nr, no, nu] = await Promise.all([
         api.get('/api/parc/audit/no-site'),
+        api.get('/api/parc/audit/no-building'),
         api.get('/api/parc/audit/no-room'),
-        api.get('/api/parc/audit/stale-ad'),
-        api.get('/api/parc/audit/warranty'),
+        api.get('/api/parc/audit/no-os'),
+        api.get('/api/parc/audit/no-user'),
       ]);
       auditNoSite = ns;
+      auditNoBuilding = nb;
       auditNoRoom = nr;
-      auditStaleAd = sa;
-      auditWarranty = wa;
+      auditNoOs = no;
+      auditNoUser = nu;
       auditLoaded = true;
     } catch (e) {
       toastError('Erreur chargement audit : ' + e.message);
@@ -237,13 +245,50 @@
       rooms = rooms;
     }
   }
+
+  // ── GLPI ─────────────────────────────────────────────────
+  async function loadGlpiConfig() {
+    try {
+      const cfg = await api.get('/api/glpi/config');
+      glpiConfig = cfg.configured ? cfg : null;
+      if (glpiConfig) {
+        const st = await api.get('/api/glpi/stats');
+        glpiStats = st;
+      }
+    } catch (e) {
+      glpiConfig = null;
+    }
+  }
+
+  async function triggerGlpiSync() {
+    glpiSyncing = true;
+    try {
+      const result = await api.post('/api/glpi/sync');
+      success(`Sync GLPI : ${result.created} créés, ${result.updated} mis à jour, ${result.unchanged} inchangés`);
+      await loadGlpiConfig();
+      await loadAll();
+    } catch (e) {
+      toastError('Erreur sync GLPI : ' + e.message);
+    }
+    glpiSyncing = false;
+  }
 </script>
 
 <!-- ── KPI Stats ──────────────────────────────────────────── -->
 <div class="page-header">
   <div class="title-row">
     <h1>Parc Informatique</h1>
-    <button class="btn-primary" on:click={openNew}>+ Ajouter</button>
+    <div class="header-actions">
+      {#if glpiConfig}
+        <button class="btn-sync" on:click={triggerGlpiSync} disabled={glpiSyncing} title="Synchroniser avec GLPI">
+          {glpiSyncing ? '⏳ Sync…' : '🔄 Sync GLPI'}
+        </button>
+        {#if glpiStats?.last_sync}
+          <span class="sync-info">Dernière sync : {new Date(glpiStats.last_sync).toLocaleString('fr-FR')}</span>
+        {/if}
+      {/if}
+      <button class="btn-primary" on:click={openNew}>+ Ajouter</button>
+    </div>
   </div>
 
   <div class="stats-row">
@@ -358,7 +403,7 @@
               <th>Marque / Modèle</th>
               <th>Localisation</th>
               <th>Source</th>
-              <th>Dernier vu AD</th>
+              <th>Dernier utilisateur</th>
               <th class="actions-col">Actions</th>
             </tr>
           </thead>
@@ -380,7 +425,7 @@
                   {/if}
                 </td>
                 <td><span class="source-tag">{eq.source}</span></td>
-                <td>{eq.last_seen_ad || '—'}</td>
+                <td>{eq.last_user || '—'}</td>
                 <td class="actions-col">
                   <button class="btn-icon" title="Modifier" on:click={() => openEdit(eq)}>✏️</button>
                   <button class="btn-icon danger" title="Supprimer" on:click={() => confirmDelete = eq}>🗑️</button>
@@ -405,30 +450,39 @@
   {:else}
     <div class="audit-grid">
       <div class="audit-card" class:warning={auditNoSite.length > 0}>
-        <h3>Sans site <span class="badge">{auditNoSite.length}</span></h3>
+        <h3>🏢 Sans site <span class="badge">{auditNoSite.length}</span></h3>
         {#if auditNoSite.length > 0}
-          <ul>{#each auditNoSite as eq}<li>{eq.hostname}</li>{/each}</ul>
-        {:else}<p class="ok">Aucun</p>{/if}
+          <ul>{#each auditNoSite.slice(0, 20) as eq}<li>{eq.hostname}</li>{/each}
+          {#if auditNoSite.length > 20}<li class="muted">… et {auditNoSite.length - 20} autres</li>{/if}</ul>
+        {:else}<p class="ok">Tous assignés</p>{/if}
+      </div>
+      <div class="audit-card" class:warning={auditNoBuilding.length > 0}>
+        <h3>🏗️ Sans bâtiment <span class="badge">{auditNoBuilding.length}</span></h3>
+        {#if auditNoBuilding.length > 0}
+          <ul>{#each auditNoBuilding.slice(0, 20) as eq}<li>{eq.hostname} {#if eq.site_name}<span class="muted">({eq.site_name})</span>{/if}</li>{/each}
+          {#if auditNoBuilding.length > 20}<li class="muted">… et {auditNoBuilding.length - 20} autres</li>{/if}</ul>
+        {:else}<p class="ok">Tous assignés</p>{/if}
       </div>
       <div class="audit-card" class:warning={auditNoRoom.length > 0}>
-        <h3>Sans salle <span class="badge">{auditNoRoom.length}</span></h3>
+        <h3>🚪 Sans salle <span class="badge">{auditNoRoom.length}</span></h3>
         {#if auditNoRoom.length > 0}
-          <ul>{#each auditNoRoom.slice(0, 20) as eq}<li>{eq.hostname}</li>{/each}
+          <ul>{#each auditNoRoom.slice(0, 20) as eq}<li>{eq.hostname} {#if eq.building_name}<span class="muted">({eq.building_name})</span>{/if}</li>{/each}
           {#if auditNoRoom.length > 20}<li class="muted">… et {auditNoRoom.length - 20} autres</li>{/if}</ul>
-        {:else}<p class="ok">Aucun</p>{/if}
+        {:else}<p class="ok">Tous assignés</p>{/if}
       </div>
-      <div class="audit-card" class:warning={auditStaleAd.length > 0}>
-        <h3>Inactifs AD &gt; 30j <span class="badge">{auditStaleAd.length}</span></h3>
-        {#if auditStaleAd.length > 0}
-          <ul>{#each auditStaleAd.slice(0, 20) as eq}<li>{eq.hostname} <span class="muted">({eq.last_seen_ad})</span></li>{/each}
-          {#if auditStaleAd.length > 20}<li class="muted">… et {auditStaleAd.length - 20} autres</li>{/if}</ul>
-        {:else}<p class="ok">Tous actifs</p>{/if}
+      <div class="audit-card" class:warning={auditNoOs.length > 0}>
+        <h3>💻 Sans OS <span class="badge">{auditNoOs.length}</span></h3>
+        {#if auditNoOs.length > 0}
+          <ul>{#each auditNoOs.slice(0, 20) as eq}<li>{eq.hostname} <span class="muted">({eq.equip_type})</span></li>{/each}
+          {#if auditNoOs.length > 20}<li class="muted">… et {auditNoOs.length - 20} autres</li>{/if}</ul>
+        {:else}<p class="ok">Tous renseignés</p>{/if}
       </div>
-      <div class="audit-card" class:warning={auditWarranty.length > 0}>
-        <h3>Garantie &lt; 6 mois <span class="badge">{auditWarranty.length}</span></h3>
-        {#if auditWarranty.length > 0}
-          <ul>{#each auditWarranty as eq}<li>{eq.hostname} <span class="muted">({eq.warranty_end})</span></li>{/each}</ul>
-        {:else}<p class="ok">Aucune alerte</p>{/if}
+      <div class="audit-card" class:warning={auditNoUser.length > 0}>
+        <h3>👤 Sans utilisateur <span class="badge">{auditNoUser.length}</span></h3>
+        {#if auditNoUser.length > 0}
+          <ul>{#each auditNoUser.slice(0, 20) as eq}<li>{eq.hostname} {#if eq.site_name}<span class="muted">({eq.site_name})</span>{/if}</li>{/each}
+          {#if auditNoUser.length > 20}<li class="muted">… et {auditNoUser.length - 20} autres</li>{/if}</ul>
+        {:else}<p class="ok">Tous renseignés</p>{/if}
       </div>
     </div>
   {/if}
@@ -491,6 +545,7 @@
         <label>Source
           <select bind:value={form.source}>
             <option value="manual">Manuel</option>
+            <option value="glpi">GLPI</option>
             <option value="ad_admin">AD Admin</option>
             <option value="ad_pedago_ndk">AD Pédago NDK</option>
             <option value="ad_pedago_su">AD Pédago SU</option>
@@ -754,4 +809,21 @@
     font-weight: 600;
   }
   .btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* ── Header actions ──────────────────────────────────────── */
+  .header-actions {
+    display: flex; gap: 8px; align-items: center;
+  }
+  .btn-sync {
+    background: rgba(34,197,94,0.15); color: #22C55E;
+    border: 1px solid rgba(34,197,94,0.3); border-radius: 8px;
+    padding: 8px 14px; cursor: pointer; font-size: 0.82rem;
+    font-weight: 600; transition: all 0.2s;
+  }
+  .btn-sync:hover { background: rgba(34,197,94,0.25); }
+  .btn-sync:disabled { opacity: 0.5; cursor: not-allowed; }
+  .sync-info {
+    font-size: 0.72rem; color: rgba(255,255,255,0.4);
+    white-space: nowrap;
+  }
 </style>

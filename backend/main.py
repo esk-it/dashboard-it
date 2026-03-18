@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .database import init_db
-from .routers import dashboard, tasks, settings, search, planning, documents, changelog, wiki, news, suppliers, parc, security, bastion, tools
+from .routers import dashboard, tasks, settings, search, planning, documents, changelog, wiki, news, suppliers, parc, security, monitoring, tools, glpi
 
 
 @asynccontextmanager
@@ -38,5 +38,6 @@ app.include_router(news.router)
 app.include_router(suppliers.router)
 app.include_router(parc.router)
 app.include_router(security.router)
-app.include_router(bastion.router)
+app.include_router(monitoring.router)
 app.include_router(tools.router)
+app.include_router(glpi.router)

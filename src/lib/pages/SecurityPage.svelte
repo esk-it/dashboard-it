@@ -16,6 +16,15 @@
   let configForm = { client_id: '', client_secret: '' };
   let savingConfig = false;
 
+  // Tabs
+  let activeTab = 'devices';
+
+  // Cross-reference
+  let crossRef = null;
+  let crossRefLoading = false;
+  let crossRefSubTab = 'unprotected';
+  let crossRefSearch = '';
+
   // Derived
   $: filteredDevices = devices.filter(d => {
     if (!searchQuery) return true;
@@ -24,6 +33,18 @@
            (d.os || '').toLowerCase().includes(q) ||
            (d.ipAddress || '').toLowerCase().includes(q);
   });
+
+  $: crossRefFiltered = crossRef ? filterCrossRef(crossRef, crossRefSubTab, crossRefSearch) : [];
+
+  function filterCrossRef(cr, tab, search) {
+    const list = cr[tab] || [];
+    if (!search) return list;
+    const q = search.toLowerCase();
+    return list.filter(item => {
+      const values = Object.values(item).map(v => String(v).toLowerCase());
+      return values.some(v => v.includes(q));
+    });
+  }
 
   // ── Load ───────────────────────────────────────────────────
   onMount(() => { loadAll(); });
@@ -94,6 +115,21 @@
     }
   }
 
+  function switchTab(tab) {
+    activeTab = tab;
+    if (tab === 'coverage' && !crossRef) loadCrossRef();
+  }
+
+  async function loadCrossRef() {
+    crossRefLoading = true;
+    try {
+      crossRef = await api.get('/api/security/crossref');
+    } catch (e) {
+      toastError('Erreur chargement couverture : ' + e.message);
+    }
+    crossRefLoading = false;
+  }
+
   function formatDate(iso) {
     if (!iso) return '—';
     try {
@@ -140,74 +176,248 @@
   </div>
 </div>
 
-<!-- ── Content ────────────────────────────────────────────── -->
-{#if !config.configured}
-  <!-- Not configured state -->
-  <div class="empty-state">
-    <div class="empty-card">
-      <span class="empty-icon">🛡️</span>
-      <h2>WithSecure non configuré</h2>
-      <p>Configurez vos identifiants API WithSecure Elements pour voir l'état de vos appareils protégés.</p>
-      <button class="btn-primary" on:click={openConfig}>Configurer</button>
-    </div>
-  </div>
-{:else if loading}
-  <div class="loading">Chargement…</div>
-{:else}
-  <!-- Filters -->
-  <div class="filters-bar">
-    <input type="text" placeholder="Rechercher hostname, OS, IP…"
-           class="search-input" bind:value={searchQuery} />
-    <span class="result-count">{filteredDevices.length} appareil{filteredDevices.length !== 1 ? 's' : ''}</span>
-  </div>
+<!-- ── Tabs ────────────────────────────────────────────────── -->
+<div class="tabs">
+  <button class="tab" class:active={activeTab === 'devices'} on:click={() => switchTab('devices')}>
+    Appareils
+  </button>
+  <button class="tab" class:active={activeTab === 'coverage'} on:click={() => switchTab('coverage')}>
+    Couverture
+  </button>
+</div>
 
-  <!-- Devices Table -->
-  <div class="table-wrapper">
-    <table>
-      <thead>
-        <tr>
-          <th>Statut</th>
-          <th>Hostname</th>
-          <th>OS</th>
-          <th>Profil</th>
-          <th>Version client</th>
-          <th>Malware</th>
-          <th>Mises à jour</th>
-          <th>IP</th>
-          <th>Enregistré</th>
-        </tr>
-      </thead>
-      <tbody>
-        {#each filteredDevices as device}
+<!-- ── Content ────────────────────────────────────────────── -->
+{#if activeTab === 'devices'}
+  {#if !config.configured}
+    <div class="empty-state">
+      <div class="empty-card">
+        <span class="empty-icon">🛡️</span>
+        <h2>WithSecure non configuré</h2>
+        <p>Configurez vos identifiants API WithSecure Elements pour voir l'état de vos appareils protégés.</p>
+        <button class="btn-primary" on:click={openConfig}>Configurer</button>
+      </div>
+    </div>
+  {:else if loading}
+    <div class="loading">Chargement…</div>
+  {:else}
+    <div class="filters-bar">
+      <input type="text" placeholder="Rechercher hostname, OS, IP…"
+             class="search-input" bind:value={searchQuery} />
+      <span class="result-count">{filteredDevices.length} appareil{filteredDevices.length !== 1 ? 's' : ''}</span>
+    </div>
+
+    <div class="table-wrapper">
+      <table>
+        <thead>
           <tr>
-            <td>
-              <span class="status-dot" class:online={device.online} class:offline={!device.online}
-                    title={device.online ? 'En ligne' : 'Hors ligne'}></span>
-            </td>
-            <td class="hostname">{device.name || '—'}</td>
-            <td>{device.os || '—'}</td>
-            <td>{device.profileName || '—'}</td>
-            <td>{device.clientVersion || '—'}</td>
-            <td>
-              {#if device.malwareProtection}
-                <span class="protection-badge"
-                      class:ok={device.malwareProtection.toLowerCase() === 'ok'}
-                      class:alert={device.malwareProtection.toLowerCase() !== 'ok'}>
-                  {device.malwareProtection}
-                </span>
-              {:else}—{/if}
-            </td>
-            <td>{device.updatesStatus || '—'}</td>
-            <td class="mono">{device.ipAddress || '—'}</td>
-            <td>{formatDate(device.registeredAt)}</td>
+            <th>Statut</th>
+            <th>Hostname</th>
+            <th>OS</th>
+            <th>Profil</th>
+            <th>Version client</th>
+            <th>Malware</th>
+            <th>Mises à jour</th>
+            <th>IP</th>
+            <th>Enregistré</th>
           </tr>
-        {/each}
-        {#if filteredDevices.length === 0}
-          <tr><td colspan="9" class="empty-row">Aucun appareil trouvé</td></tr>
-        {/if}
-      </tbody>
-    </table>
-  </div>
+        </thead>
+        <tbody>
+          {#each filteredDevices as device}
+            <tr>
+              <td>
+                <span class="status-dot" class:online={device.online} class:offline={!device.online}
+                      title={device.online ? 'En ligne' : 'Hors ligne'}></span>
+              </td>
+              <td class="hostname">{device.name || '—'}</td>
+              <td>{device.os || '—'}</td>
+              <td>{device.profileName || '—'}</td>
+              <td>{device.clientVersion || '—'}</td>
+              <td>
+                {#if device.malwareProtection}
+                  <span class="protection-badge"
+                        class:ok={device.malwareProtection.toLowerCase() === 'ok'}
+                        class:alert={device.malwareProtection.toLowerCase() !== 'ok'}>
+                    {device.malwareProtection}
+                  </span>
+                {:else}—{/if}
+              </td>
+              <td>{device.updatesStatus || '—'}</td>
+              <td class="mono">{device.ipAddress || '—'}</td>
+              <td>{formatDate(device.registeredAt)}</td>
+            </tr>
+          {/each}
+          {#if filteredDevices.length === 0}
+            <tr><td colspan="9" class="empty-row">Aucun appareil trouvé</td></tr>
+          {/if}
+        </tbody>
+      </table>
+    </div>
+  {/if}
+
+{:else if activeTab === 'coverage'}
+  <!-- ── Coverage Tab ──────────────────────────────────────── -->
+  {#if crossRefLoading}
+    <div class="loading">Chargement couverture…</div>
+  {:else if crossRef}
+    <!-- Coverage Stats -->
+    <div class="stats-row coverage-stats">
+      <div class="stat-card accent">
+        <span class="stat-value">{crossRef.stats.total_parc}</span>
+        <span class="stat-label">Postes Parc</span>
+      </div>
+      <div class="stat-card protected">
+        <span class="stat-value">{crossRef.stats.protected}</span>
+        <span class="stat-label">Protégés</span>
+      </div>
+      <div class="stat-card unprotected" class:has-alerts={crossRef.stats.unprotected > 0}>
+        <span class="stat-value">{crossRef.stats.unprotected}</span>
+        <span class="stat-label">Non protégés</span>
+      </div>
+      <div class="stat-card unknown-card">
+        <span class="stat-value">{crossRef.stats.unknown}</span>
+        <span class="stat-label">Inconnus WS</span>
+      </div>
+      <div class="stat-card coverage-pct">
+        <span class="stat-value">{crossRef.stats.coverage_percent}%</span>
+        <span class="stat-label">Couverture</span>
+      </div>
+    </div>
+
+    <!-- Sub-tabs -->
+    <div class="sub-tabs">
+      <button class="sub-tab" class:active={crossRefSubTab === 'unprotected'}
+              on:click={() => crossRefSubTab = 'unprotected'}>
+        Non protégés <span class="badge danger">{crossRef.stats.unprotected}</span>
+      </button>
+      <button class="sub-tab" class:active={crossRefSubTab === 'protected'}
+              on:click={() => crossRefSubTab = 'protected'}>
+        Protégés <span class="badge ok">{crossRef.stats.protected}</span>
+      </button>
+      <button class="sub-tab" class:active={crossRefSubTab === 'unknown'}
+              on:click={() => crossRefSubTab = 'unknown'}>
+        Inconnus <span class="badge warn">{crossRef.stats.unknown}</span>
+      </button>
+    </div>
+
+    <div class="filters-bar">
+      <input type="text" placeholder="Rechercher…"
+             class="search-input" bind:value={crossRefSearch} />
+      <span class="result-count">{crossRefFiltered.length} résultat{crossRefFiltered.length !== 1 ? 's' : ''}</span>
+      <button class="btn-refresh" on:click={loadCrossRef} title="Rafraîchir">🔄</button>
+    </div>
+
+    <div class="table-wrapper">
+      {#if crossRefSubTab === 'unprotected'}
+        <table>
+          <thead>
+            <tr>
+              <th>Hostname</th>
+              <th>Type</th>
+              <th>OS</th>
+              <th>Site</th>
+              <th>Bâtiment</th>
+              <th>N° Série</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each crossRefFiltered as item}
+              <tr>
+                <td class="hostname">{item.hostname || '—'}</td>
+                <td><span class="type-badge">{item.equip_type}</span></td>
+                <td>{item.os || '—'}</td>
+                <td>{item.site_name || '—'}</td>
+                <td>{item.building_name || '—'}</td>
+                <td>{item.serial_number || '—'}</td>
+              </tr>
+            {/each}
+            {#if crossRefFiltered.length === 0}
+              <tr><td colspan="6" class="empty-row">Aucun poste non protégé</td></tr>
+            {/if}
+          </tbody>
+        </table>
+
+      {:else if crossRefSubTab === 'protected'}
+        <table>
+          <thead>
+            <tr>
+              <th>Hostname</th>
+              <th>Type</th>
+              <th>OS</th>
+              <th>Site</th>
+              <th>Statut WS</th>
+              <th>Protection</th>
+              <th>IP</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each crossRefFiltered as item}
+              <tr>
+                <td class="hostname">{item.hostname || '—'}</td>
+                <td><span class="type-badge">{item.equip_type}</span></td>
+                <td>{item.os || '—'}</td>
+                <td>{item.site_name || '—'}</td>
+                <td>
+                  <span class="status-dot" class:online={item.ws_online} class:offline={!item.ws_online}></span>
+                  {item.ws_online ? 'En ligne' : 'Hors ligne'}
+                </td>
+                <td>
+                  {#if item.ws_malwareProtection}
+                    <span class="protection-badge"
+                          class:ok={item.ws_malwareProtection.toLowerCase() === 'ok'}
+                          class:alert={item.ws_malwareProtection.toLowerCase() !== 'ok'}>
+                      {item.ws_malwareProtection}
+                    </span>
+                  {:else}—{/if}
+                </td>
+                <td class="mono">{item.ws_ipAddress || '—'}</td>
+              </tr>
+            {/each}
+            {#if crossRefFiltered.length === 0}
+              <tr><td colspan="7" class="empty-row">Aucun poste protégé trouvé</td></tr>
+            {/if}
+          </tbody>
+        </table>
+
+      {:else if crossRefSubTab === 'unknown'}
+        <table>
+          <thead>
+            <tr>
+              <th>Nom WithSecure</th>
+              <th>OS</th>
+              <th>Statut</th>
+              <th>IP</th>
+              <th>Profil</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each crossRefFiltered as item}
+              <tr>
+                <td class="hostname">{item.ws_name || '—'}</td>
+                <td>{item.ws_os || '—'}</td>
+                <td>
+                  <span class="status-dot" class:online={item.ws_online} class:offline={!item.ws_online}></span>
+                  {item.ws_online ? 'En ligne' : 'Hors ligne'}
+                </td>
+                <td class="mono">{item.ws_ipAddress || '—'}</td>
+                <td>{item.ws_profileName || '—'}</td>
+              </tr>
+            {/each}
+            {#if crossRefFiltered.length === 0}
+              <tr><td colspan="5" class="empty-row">Aucun appareil inconnu</td></tr>
+            {/if}
+          </tbody>
+        </table>
+      {/if}
+    </div>
+  {:else}
+    <div class="empty-state">
+      <div class="empty-card">
+        <span class="empty-icon">📊</span>
+        <h2>Couverture sécurité</h2>
+        <p>Synchronisez le module Parc et WithSecure pour voir la couverture de protection.</p>
+      </div>
+    </div>
+  {/if}
 {/if}
 
 <!-- ── Config Dialog ──────────────────────────────────────── -->
@@ -398,4 +608,58 @@
     padding: 8px 14px; cursor: pointer; font-size: 0.85rem;
   }
   .btn-icon-text:hover { background: rgba(255,255,255,0.12); }
+
+  /* ── Tabs ────────────────────────────────────────────────── */
+  .tabs {
+    display: flex; gap: 4px; margin-bottom: 16px;
+    border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,0.08));
+    padding-bottom: 0;
+  }
+  .tab {
+    background: none; border: none; color: rgba(255,255,255,0.5);
+    padding: 10px 20px; cursor: pointer; font-size: 0.9rem;
+    border-bottom: 2px solid transparent; transition: all 0.2s;
+  }
+  .tab:hover { color: rgba(255,255,255,0.8); }
+  .tab.active {
+    color: #fff; border-bottom-color: var(--accent, #6C63FF);
+  }
+
+  /* ── Sub-tabs ─────────────────────────────────────────────── */
+  .sub-tabs {
+    display: flex; gap: 6px; margin-bottom: 12px;
+  }
+  .sub-tab {
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+    color: rgba(255,255,255,0.6); border-radius: 8px;
+    padding: 7px 14px; cursor: pointer; font-size: 0.82rem;
+    transition: all 0.2s;
+  }
+  .sub-tab:hover { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.9); }
+  .sub-tab.active {
+    background: rgba(108,99,255,0.15); border-color: var(--accent, #6C63FF);
+    color: #fff;
+  }
+  .badge { border-radius: 10px; padding: 1px 7px; font-size: 0.7rem; margin-left: 4px; font-weight: 600; }
+  .badge.danger { background: rgba(239,68,68,0.2); color: #EF4444; }
+  .badge.ok { background: rgba(34,197,94,0.2); color: #22C55E; }
+  .badge.warn { background: rgba(245,158,11,0.2); color: #F59E0B; }
+
+  /* ── Coverage stats ───────────────────────────────────────── */
+  .coverage-stats { margin-bottom: 16px; }
+  .stat-card.protected { border-color: #22C55E; }
+  .stat-card.unprotected { border-color: #EF4444; }
+  .stat-card.unprotected.has-alerts { background: rgba(239,68,68,0.08); }
+  .stat-card.unknown-card { border-color: #F59E0B; }
+  .stat-card.coverage-pct { border-color: var(--accent, #6C63FF); }
+
+  .type-badge {
+    background: rgba(108,99,255,0.2); color: var(--accent, #6C63FF);
+    border-radius: 6px; padding: 2px 8px; font-size: 0.75rem; font-weight: 600;
+  }
+  .btn-refresh {
+    background: none; border: none; cursor: pointer; font-size: 1rem;
+    padding: 4px 8px; border-radius: 6px; transition: background 0.15s;
+  }
+  .btn-refresh:hover { background: rgba(255,255,255,0.08); }
 </style>

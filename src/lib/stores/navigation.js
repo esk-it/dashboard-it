@@ -14,7 +14,7 @@ export const navItems = [
   { key: 'security', path: '/security', icon: 'Shield', label: 'Sécurité', emoji: '\u{1F6E1}\uFE0F' },
   { key: 'wiki', path: '/wiki', icon: 'BookOpen', label: 'Procédures', emoji: '\u{1F4D6}' },
   { key: 'changelog', path: '/changelog', icon: 'ClipboardList', label: 'Changelog', emoji: '\u{1F4CB}' },
-  { key: 'bastion', path: '/bastion', icon: 'Plug', label: 'Bastion', emoji: '\u{1F50C}' },
+  { key: 'monitoring', path: '/monitoring', icon: 'Activity', label: 'Monitoring', emoji: '\u{1F4E1}' },
   { type: 'separator' },
   { key: 'tools', path: '/tools', icon: 'Wrench', label: 'Outils', emoji: '\u{1F527}', bottom: true },
   { key: 'settings', path: '/settings', icon: 'Settings', label: 'Paramètres', emoji: '\u2699\uFE0F', bottom: true },

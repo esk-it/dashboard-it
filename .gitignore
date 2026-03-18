@@ -30,3 +30,12 @@ build/
 
 # Tauri sidecar binary (rebuilt by CI)
 src-tauri/binaries/*.exe
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Runtime data (DB, API configs/caches, backups)
+backend/dashboard.db
+backend/data/*.json
+backend/backups/

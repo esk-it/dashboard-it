@@ -41,3 +41,49 @@ class SecurityStats(BaseModel):
 class SyncResponse(BaseModel):
     total: int
     synced_at: str
+
+
+# ── Cross-reference Parc × WithSecure ─────────────────────
+
+class CrossRefStats(BaseModel):
+    total_parc: int = 0
+    total_ws: int = 0
+    protected: int = 0
+    unprotected: int = 0
+    unknown: int = 0
+    coverage_percent: float = 0.0
+
+
+class ProtectedDevice(BaseModel):
+    hostname: str = ""
+    equip_type: str = ""
+    os: str = ""
+    site_name: str = ""
+    ws_name: str = ""
+    ws_online: bool = False
+    ws_malwareProtection: str = ""
+    ws_ipAddress: str = ""
+
+
+class UnprotectedDevice(BaseModel):
+    hostname: str = ""
+    equip_type: str = ""
+    os: str = ""
+    site_name: str = ""
+    building_name: str = ""
+    serial_number: str = ""
+
+
+class UnknownDevice(BaseModel):
+    ws_name: str = ""
+    ws_os: str = ""
+    ws_online: bool = False
+    ws_ipAddress: str = ""
+    ws_profileName: str = ""
+
+
+class CrossRefResponse(BaseModel):
+    stats: CrossRefStats = CrossRefStats()
+    protected: list[ProtectedDevice] = []
+    unprotected: list[UnprotectedDevice] = []
+    unknown: list[UnknownDevice] = []

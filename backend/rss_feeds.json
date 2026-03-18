@@ -1,22 +1,44 @@
 [
   {
-    "name": "CERT-FR Alertes",
+    "name": "CERT-FR",
     "url": "https://www.cert.ssi.gouv.fr/feed/",
+    "category": "Sécurité",
     "enabled": true
   },
   {
-    "name": "IT-Connect",
+    "name": "Bleeping Computer",
+    "url": "https://www.bleepingcomputer.com/feed/",
+    "category": "Sécurité",
+    "enabled": true
+  },
+  {
+    "name": "The Hacker News",
+    "url": "https://feeds.feedburner.com/TheHackersNews",
+    "category": "Sécurité",
+    "enabled": true
+  },
+  {
+    "name": "IT Connect",
     "url": "https://www.it-connect.fr/feed/",
+    "category": "Infra",
+    "enabled": true
+  },
+  {
+    "name": "ZATAZ",
+    "url": "https://www.zataz.com/feed/",
+    "category": "Sécurité",
     "enabled": true
   },
   {
     "name": "01net",
-    "url": "https://www.01net.com/rss/",
+    "url": "https://www.01net.com/rss/info/flux-rss/flux-toutes-les-actualites/",
+    "category": "Tech",
     "enabled": true
   },
   {
-    "name": "Journal du Net",
-    "url": "https://www.journaldunet.com/rss/",
+    "name": "LeMagIT",
+    "url": "https://www.lemagit.fr/rss/ContentSyndication.xml",
+    "category": "Tech",
     "enabled": true
   }
 ]

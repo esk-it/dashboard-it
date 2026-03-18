@@ -10,6 +10,7 @@ class WikiArticleCreate(BaseModel):
     tags: str = ""
     pinned: bool = False
     source_path: str = ""
+    content_format: str = "html"
 
 
 class WikiArticleUpdate(WikiArticleCreate):
@@ -23,6 +24,7 @@ class WikiArticleListResponse(BaseModel):
     pinned: bool
     tags: str
     updated_at: str
+    content_format: str = "html"
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -37,6 +39,7 @@ class WikiArticleResponse(BaseModel):
     created_at: str
     updated_at: str
     source_path: str
+    content_format: str = "html"
 
     model_config = ConfigDict(from_attributes=True)
 
