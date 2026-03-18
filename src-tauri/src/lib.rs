@@ -39,20 +39,43 @@ pub fn run() {
 
             Ok(())
         })
-        .on_window_event(|window, event| {
-            if let tauri::WindowEvent::Destroyed = event {
-                // Kill the backend when the window is closed
-                if let Some(state) = window.try_state::<BackendChild>() {
-                    if let Ok(mut guard) = state.0.lock() {
-                        if let Some(child) = guard.take() {
-                            let _ = child.kill();
-                        }
-                    }
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            match event {
+                tauri::RunEvent::WindowEvent {
+                    event: tauri::WindowEvent::CloseRequested { .. },
+                    ..
+                } => {
+                    kill_backend(app_handle);
                 }
+                tauri::RunEvent::Exit => {
+                    kill_backend(app_handle);
+                }
+                _ => {}
             }
-        })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        });
+}
+
+fn kill_backend(handle: &tauri::AppHandle) {
+    if let Some(state) = handle.try_state::<BackendChild>() {
+        if let Ok(mut guard) = state.0.lock() {
+            if let Some(child) = guard.take() {
+                log::info!("Killing backend process...");
+                let _ = child.kill();
+            }
+        }
+    }
+
+    // Fallback: force kill any remaining backend.exe via taskkill (Windows)
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        let _ = std::process::Command::new("taskkill")
+            .args(["/F", "/IM", "backend.exe"])
+            .creation_flags(0x08000000) // CREATE_NO_WINDOW
+            .output();
+    }
 }
 
 async fn check_for_updates(handle: tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
@@ -83,6 +106,9 @@ async fn check_for_updates(handle: tauri::AppHandle) -> Result<(), Box<dyn std::
 
         // Wait a moment for user response
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+        // Kill backend before update to release file locks
+        kill_backend(&handle);
 
         // Download and install the update
         let mut downloaded = 0;
