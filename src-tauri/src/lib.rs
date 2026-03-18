@@ -80,7 +80,7 @@ fn kill_backend(handle: &tauri::AppHandle) {
 
 async fn check_for_updates(handle: tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     // Small delay to let the window load
-    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+    std::thread::sleep(std::time::Duration::from_secs(3));
 
     log::info!("Checking for updates...");
     let update = handle.updater()?.check().await?;
@@ -105,7 +105,7 @@ async fn check_for_updates(handle: tauri::AppHandle) -> Result<(), Box<dyn std::
         ));
 
         // Wait a moment for user response
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        std::thread::sleep(std::time::Duration::from_secs(1));
 
         // Kill backend before update to release file locks
         kill_backend(&handle);
