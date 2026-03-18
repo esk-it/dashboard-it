@@ -49,7 +49,20 @@ jobs:
           New-Item -ItemType Directory -Path "src-tauri\binaries" -Force
           Copy-Item "dist\backend.exe" "src-tauri\binaries\backend-x86_64-pc-windows-msvc.exe" -Force
 
+      - name: Debug signing key
+        run: |
+          if ($env:TAURI_SIGNING_PRIVATE_KEY) {
+            Write-Host "TAURI_SIGNING_PRIVATE_KEY is SET (length: $($env:TAURI_SIGNING_PRIVATE_KEY.Length))"
+          } else {
+            Write-Host "WARNING: TAURI_SIGNING_PRIVATE_KEY is EMPTY or NOT SET"
+          }
+          Write-Host "TAURI_SIGNING_PRIVATE_KEY_PASSWORD is: '$($env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD)'"
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+
       - name: Build Tauri app
+        id: tauri
         uses: tauri-apps/tauri-action@v0.5
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -62,3 +75,11 @@ jobs:
           releaseDraft: false
           prerelease: false
           updaterJsonKeepUniversal: true
+
+      - name: Debug Tauri outputs
+        run: |
+          Write-Host "Tauri artifacts:"
+          Get-ChildItem -Recurse "src-tauri\target\release\bundle" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
+          Write-Host "---"
+          Write-Host "Looking for .sig files:"
+          Get-ChildItem -Recurse "src-tauri\target\release\bundle" -Filter "*.sig" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
