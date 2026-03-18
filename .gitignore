@@ -38,4 +38,10 @@ __pycache__/
 # Runtime data (DB, API configs/caches, backups)
 backend/dashboard.db
 backend/data/*.json
+backend/data/documents/
+backend/data/logos/
 backend/backups/
+
+# Signing keys & CI artifacts
+SIGNING_KEY.txt
+*.zip

@@ -56,9 +56,33 @@ pub fn run() {
 }
 
 async fn check_for_updates(handle: tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+    // Small delay to let the window load
+    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+
+    log::info!("Checking for updates...");
     let update = handle.updater()?.check().await?;
     if let Some(update) = update {
         log::info!("Update available: {}", update.version);
+
+        // Show a dialog to the user
+        let window = handle.get_webview_window("main").unwrap();
+        let version = update.version.clone();
+        let _ = window.eval(&format!(
+            r#"
+            (function() {{
+                if (confirm('Une mise à jour est disponible (v{}).\n\nVoulez-vous la télécharger et l\'installer maintenant ?')) {{
+                    document.title = 'Mise à jour en cours...';
+                    window.__tauriUpdateAccepted = true;
+                }} else {{
+                    window.__tauriUpdateAccepted = false;
+                }}
+            }})()
+            "#,
+            version
+        ));
+
+        // Wait a moment for user response
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
         // Download and install the update
         let mut downloaded = 0;
@@ -72,7 +96,10 @@ async fn check_for_updates(handle: tauri::AppHandle) -> Result<(), Box<dyn std::
             },
         ).await?;
 
-        log::info!("Update installed, restart required");
+        log::info!("Update installed, restarting...");
+        handle.restart();
+    } else {
+        log::info!("No update available.");
     }
     Ok(())
 }
