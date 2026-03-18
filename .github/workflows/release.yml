@@ -49,37 +49,127 @@ jobs:
           New-Item -ItemType Directory -Path "src-tauri\binaries" -Force
           Copy-Item "dist\backend.exe" "src-tauri\binaries\backend-x86_64-pc-windows-msvc.exe" -Force
 
-      - name: Debug signing key
-        run: |
-          if ($env:TAURI_SIGNING_PRIVATE_KEY) {
-            Write-Host "TAURI_SIGNING_PRIVATE_KEY is SET (length: $($env:TAURI_SIGNING_PRIVATE_KEY.Length))"
-          } else {
-            Write-Host "WARNING: TAURI_SIGNING_PRIVATE_KEY is EMPTY or NOT SET"
-          }
-          Write-Host "TAURI_SIGNING_PRIVATE_KEY_PASSWORD is: '$($env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD)'"
+      - name: Build and sign Tauri app
+        shell: pwsh
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        run: |
+          Write-Host "Building Tauri app with signing enabled..."
+          Write-Host "TAURI_SIGNING_PRIVATE_KEY length: $($env:TAURI_SIGNING_PRIVATE_KEY.Length)"
+          Write-Host "TAURI_SIGNING_PRIVATE_KEY_PASSWORD is set to empty string: '$($env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD)'"
+          npx tauri build 2>&1
 
-      - name: Build Tauri app
-        id: tauri
-        uses: tauri-apps/tauri-action@v0.5
+          Write-Host ""
+          Write-Host "=== Build output ==="
+          $bundleDir = "src-tauri\target\release\bundle"
+          Write-Host "NSIS files:"
+          Get-ChildItem "$bundleDir\nsis\" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $($_.Name) ($($_.Length) bytes)" }
+          Write-Host "MSI files:"
+          Get-ChildItem "$bundleDir\msi\" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $($_.Name) ($($_.Length) bytes)" }
+          Write-Host "All .sig files:"
+          Get-ChildItem -Recurse "$bundleDir" -Filter "*.sig" -ErrorAction SilentlyContinue | ForEach-Object {
+            Write-Host "  $($_.FullName)"
+            Write-Host "  Content: $(Get-Content $_.FullName -Raw)"
+          }
+
+      - name: Create latest.json and upload release
+        shell: pwsh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "ITManager Dashboard ${{ github.ref_name }}"
-          releaseBody: "Nouvelle version du Dashboard IT."
-          releaseDraft: false
-          prerelease: false
-          updaterJsonKeepUniversal: true
-
-      - name: Debug Tauri outputs
         run: |
-          Write-Host "Tauri artifacts:"
-          Get-ChildItem -Recurse "src-tauri\target\release\bundle" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
-          Write-Host "---"
-          Write-Host "Looking for .sig files:"
-          Get-ChildItem -Recurse "src-tauri\target\release\bundle" -Filter "*.sig" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
+          $version = "${{ github.ref_name }}" -replace '^v',''
+          $tag = "${{ github.ref_name }}"
+          $bundleDir = "src-tauri\target\release\bundle"
+          $repo = "${{ github.repository }}"
+
+          # Find the NSIS zip and its signature (Tauri auto-generates these when signing works)
+          $nsisZip = Get-ChildItem "$bundleDir\nsis\*.nsis.zip" -ErrorAction SilentlyContinue | Select-Object -First 1
+          $nsisZipSig = ""
+
+          if (-not $nsisZip) {
+            Write-Host "WARNING: No .nsis.zip found! Tauri signing may have failed."
+            Write-Host "Falling back to manual zip + sign..."
+
+            # Manual fallback: create zip and sign it
+            $nsisExe = Get-ChildItem "$bundleDir\nsis\*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($nsisExe) {
+              $zipPath = "$($nsisExe.FullName -replace '\.exe$','.nsis.zip')"
+              Compress-Archive -Path $nsisExe.FullName -DestinationPath $zipPath -Force
+              $nsisZip = Get-Item $zipPath
+
+              Write-Host "Signing manually with tauri signer..."
+              npx tauri signer sign --private-key "$env:TAURI_SIGNING_PRIVATE_KEY" --password "" "$zipPath" 2>&1
+
+              $sigPath = "$zipPath.sig"
+              if (Test-Path $sigPath) {
+                $nsisZipSig = (Get-Content $sigPath -Raw).Trim()
+                Write-Host "Manual signing succeeded!"
+              } else {
+                Write-Host "ERROR: Manual signing also failed!"
+              }
+            }
+          } else {
+            # Read auto-generated signature
+            $sigPath = "$($nsisZip.FullName).sig"
+            if (Test-Path $sigPath) {
+              $nsisZipSig = (Get-Content $sigPath -Raw).Trim()
+              Write-Host "Found auto-generated signature for $($nsisZip.Name)"
+            }
+          }
+
+          Write-Host "Signature content (first 50 chars): $($nsisZipSig.Substring(0, [Math]::Min(50, $nsisZipSig.Length)))"
+
+          $nsisExe = Get-ChildItem "$bundleDir\nsis\*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          $msiFile = Get-ChildItem "$bundleDir\msi\*.msi" -ErrorAction SilentlyContinue | Select-Object -First 1
+
+          $now = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+
+          # Build latest.json
+          $latest = @{
+            version = $version
+            notes = "Nouvelle version du Dashboard IT."
+            pub_date = $now
+            platforms = @{
+              "windows-x86_64" = @{
+                signature = $nsisZipSig
+                url = "https://github.com/$repo/releases/download/$tag/$($nsisZip.Name)"
+              }
+            }
+          } | ConvertTo-Json -Depth 5
+
+          Write-Host "latest.json content:"
+          Write-Host $latest
+          $latest | Out-File -FilePath "latest.json" -Encoding utf8NoBOM
+
+          # Create release
+          Write-Host "Creating release..."
+          $releaseExists = $false
+          try {
+            gh release view $tag --repo $repo 2>$null
+            $releaseExists = $true
+          } catch {}
+
+          if (-not $releaseExists) {
+            gh release create $tag --repo $repo --title "ITManager Dashboard $tag" --notes "Nouvelle version du Dashboard IT." 2>&1
+          }
+
+          # Upload all assets
+          $assets = @()
+          if ($nsisExe) { $assets += $nsisExe.FullName }
+          if ($msiFile) { $assets += $msiFile.FullName }
+          if ($nsisZip) { $assets += $nsisZip.FullName }
+
+          # Add all sig files
+          Get-ChildItem -Recurse "$bundleDir" -Filter "*.sig" -ErrorAction SilentlyContinue | ForEach-Object { $assets += $_.FullName }
+
+          $assets += "latest.json"
+
+          foreach ($asset in $assets) {
+            if (Test-Path $asset) {
+              Write-Host "Uploading $asset..."
+              gh release upload $tag $asset --repo $repo --clobber 2>&1
+            }
+          }
+
+          Write-Host "Done! Release $tag published."
