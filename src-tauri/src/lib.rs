@@ -166,9 +166,9 @@ async fn check_for_updates(handle: tauri::AppHandle) -> Result<(), Box<dyn std::
         // Show completion
         if let Some(window) = handle.get_webview_window("main") {
             let _ = window.eval(
-                "document.getElementById('__update_status').textContent='Installation termin\u00e9e !';\
+                "document.getElementById('__update_status').textContent='Installation termin\u{00e9}e !';\
                  document.getElementById('__update_bar').style.width='100%';\
-                 document.getElementById('__update_pct').textContent='Red\u00e9marrage dans 3 secondes...';"
+                 document.getElementById('__update_pct').textContent='Red\u{00e9}marrage dans 3 secondes...';"
             );
         }
 
