@@ -20,9 +20,163 @@
   --danger: #EF4444;
   --info: #3B82F6;
 
+  /* Extra colors for theme adaptability */
+  --text-on-card: #fff;
+  --text-heading: #e2e8f0;
+  --bg-input: rgba(255, 255, 255, 0.05);
+  --bg-input-solid: #0E1424;
+  --bg-dialog: #0E1424;
+  --bg-badge: rgba(255, 255, 255, 0.08);
+  --shadow-soft: rgba(0, 0, 0, 0.3);
+  --overlay-white-5: rgba(255, 255, 255, 0.05);
+  --overlay-white-8: rgba(255, 255, 255, 0.08);
+  --overlay-white-10: rgba(255, 255, 255, 0.1);
+  --overlay-white-15: rgba(255, 255, 255, 0.15);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.1);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.2);
+
   /* Sidebar */
   --sidebar-width-collapsed: 62px;
   --sidebar-width-expanded: 216px;
+}
+
+/* ═══════════════════════════════════════════════
+   GLASS LIGHT THEME OVERRIDES
+   ═══════════════════════════════════════════════ */
+[data-theme="glass-light"] {
+  color-scheme: light;
+  --bg-base: #E8ECF2;
+  --bg-card: rgba(255, 255, 255, 0.72);
+  --bg-card-solid: #F5F7FA;
+  --bg-sidebar: rgba(240, 243, 248, 0.92);
+  --bg-hover: rgba(0, 0, 0, 0.04);
+  --border-subtle: rgba(0, 0, 0, 0.08);
+  --border-hover: rgba(0, 0, 0, 0.14);
+  --text-primary: rgba(15, 23, 42, 0.92);
+  --text-secondary: rgba(51, 65, 85, 0.85);
+  --text-muted: rgba(100, 116, 139, 0.7);
+  --text-on-card: #1e293b;
+  --text-heading: #0f172a;
+  --bg-input: rgba(0, 0, 0, 0.04);
+  --bg-input-solid: #ffffff;
+  --bg-dialog: #ffffff;
+  --bg-badge: rgba(0, 0, 0, 0.06);
+  --shadow-soft: rgba(0, 0, 0, 0.08);
+  --overlay-white-5: rgba(0, 0, 0, 0.03);
+  --overlay-white-8: rgba(0, 0, 0, 0.05);
+  --overlay-white-10: rgba(0, 0, 0, 0.06);
+  --overlay-white-15: rgba(0, 0, 0, 0.08);
+  --scrollbar-thumb: rgba(0, 0, 0, 0.12);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="glass-light"] body {
+  background: #E8ECF2;
+}
+
+/* Light theme: fix ALL hardcoded white text/colors */
+[data-theme="glass-light"] h1,
+[data-theme="glass-light"] h2,
+[data-theme="glass-light"] h3,
+[data-theme="glass-light"] h4 {
+  color: var(--text-heading) !important;
+}
+
+[data-theme="glass-light"] p,
+[data-theme="glass-light"] span,
+[data-theme="glass-light"] label,
+[data-theme="glass-light"] td,
+[data-theme="glass-light"] th,
+[data-theme="glass-light"] li,
+[data-theme="glass-light"] div {
+  color: var(--text-primary);
+}
+
+/* Inputs & selects in light mode */
+[data-theme="glass-light"] select,
+[data-theme="glass-light"] select option {
+  background: #fff;
+  color: var(--text-primary);
+  border-color: var(--border-subtle);
+}
+
+[data-theme="glass-light"] input[type="text"],
+[data-theme="glass-light"] input[type="search"],
+[data-theme="glass-light"] input[type="date"],
+[data-theme="glass-light"] input[type="time"],
+[data-theme="glass-light"] input[type="datetime-local"],
+[data-theme="glass-light"] input[type="number"],
+[data-theme="glass-light"] input[type="email"],
+[data-theme="glass-light"] textarea {
+  background: var(--bg-input);
+  color: var(--text-primary);
+}
+
+[data-theme="glass-light"] input[type="date"],
+[data-theme="glass-light"] input[type="time"],
+[data-theme="glass-light"] input[type="datetime-local"] {
+  color-scheme: light;
+}
+
+/* Stat values, hostnames, card titles etc. that were hardcoded #fff */
+[data-theme="glass-light"] .stat-value,
+[data-theme="glass-light"] .hostname,
+[data-theme="glass-light"] .title-row h1,
+[data-theme="glass-light"] .audit-card h3,
+[data-theme="glass-light"] .empty-card h2,
+[data-theme="glass-light"] .dialog-header h2,
+[data-theme="glass-light"] .search-input,
+[data-theme="glass-light"] .filter-select {
+  color: var(--text-heading) !important;
+}
+
+/* Tabs */
+[data-theme="glass-light"] .tab.active {
+  color: #fff !important;
+}
+
+/* Badge / tag elements */
+[data-theme="glass-light"] .badge {
+  color: var(--text-primary);
+  background: var(--bg-badge);
+}
+
+/* Dialog overlays */
+[data-theme="glass-light"] .dialog-overlay,
+[data-theme="glass-light"] .modal-overlay {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+[data-theme="glass-light"] .dialog-content,
+[data-theme="glass-light"] .modal-content {
+  background: #fff;
+  border-color: var(--border-subtle);
+  color: var(--text-primary);
+}
+
+[data-theme="glass-light"] .dialog-content input,
+[data-theme="glass-light"] .dialog-content select,
+[data-theme="glass-light"] .dialog-content textarea,
+[data-theme="glass-light"] .modal-content input,
+[data-theme="glass-light"] .modal-content select,
+[data-theme="glass-light"] .modal-content textarea {
+  background: var(--bg-input);
+  color: var(--text-primary);
+}
+
+/* Glass cards in light mode */
+[data-theme="glass-light"] .glass-card {
+  background: var(--bg-card);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+/* Scrollbar light mode */
+[data-theme="glass-light"] ::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+}
+
+[data-theme="glass-light"] ::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
 }
 
 * {

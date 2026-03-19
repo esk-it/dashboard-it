@@ -78,6 +78,22 @@
 
   const brandIcons = ['\u26A1', '\u{1F680}', '\u{1F4BB}', '\u{1F5A5}\uFE0F', '\u{1F6E1}\uFE0F', '\u{1F50C}', '\u{1F527}', '\u{1F3E2}', '\u{1F310}', '\u2699\uFE0F'];
 
+  // Emoji picker for module icons
+  let iconPickerOpen = null; // key of module currently being edited
+  const emojiCategories = [
+    { label: 'IT / Tech', emojis: ['\u{1F4BB}', '\u{1F5A5}\uFE0F', '\u2328\uFE0F', '\u{1F5A8}\uFE0F', '\u{1F4F1}', '\u{1F4E1}', '\u{1F50C}', '\u{1F50B}', '\u{1F4BD}', '\u{1F4BE}', '\u{1F4BF}', '\u{1F4C0}', '\u{1F527}', '\u{1F529}', '\u2699\uFE0F', '\u{1F6E0}\uFE0F'] },
+    { label: 'Sécurité', emojis: ['\u{1F6E1}\uFE0F', '\u{1F512}', '\u{1F513}', '\u{1F510}', '\u{1F511}', '\u{1F6A8}', '\u26A0\uFE0F', '\u{1F6AB}', '\u2705', '\u274C', '\u{1F440}', '\u{1F575}\uFE0F'] },
+    { label: 'Bureau', emojis: ['\u{1F4C1}', '\u{1F4C2}', '\u{1F4C4}', '\u{1F4CB}', '\u{1F4CA}', '\u{1F4C8}', '\u{1F4C9}', '\u{1F4C5}', '\u{1F4C6}', '\u{1F4C7}', '\u{1F4D6}', '\u{1F4DD}', '\u270F\uFE0F', '\u{1F4CE}', '\u{1F4CC}', '\u{1F4CD}'] },
+    { label: 'Communication', emojis: ['\u{1F4E7}', '\u{1F4E8}', '\u{1F4E9}', '\u{1F4EC}', '\u{1F4E2}', '\u{1F514}', '\u{1F4AC}', '\u{1F4AD}', '\u260E\uFE0F', '\u{1F4DE}'] },
+    { label: 'Réseau / Cloud', emojis: ['\u{1F310}', '\u2601\uFE0F', '\u{1F5C4}\uFE0F', '\u{1F4E1}', '\u{1F4F6}', '\u{1F300}', '\u26A1', '\u{1F680}', '\u{1F6F0}\uFE0F', '\u{1F4E6}'] },
+    { label: 'Divers', emojis: ['\u{1F3E2}', '\u{1F464}', '\u{1F465}', '\u2B50', '\u{1F4A1}', '\u{1F3AF}', '\u{1F525}', '\u2764\uFE0F', '\u{1F4B0}', '\u{1F3C6}', '\u{1F6A9}', '\u{1F3F7}\uFE0F'] },
+  ];
+
+  function selectModuleIcon(key, emoji) {
+    setModuleIcon(key, emoji);
+    iconPickerOpen = null;
+  }
+
   const moduleList = [
     { key: 'news', label: 'Actualit\u00e9s', emoji: '\u{1F310}' },
     { key: 'planning', label: 'Planning', emoji: '\u{1F4C5}' },
@@ -198,32 +214,18 @@
   function applyTheme(themeName) {
     const root = document.documentElement;
     if (themeName === 'glass-light') {
-      root.style.setProperty('--bg-base', '#E8ECF2');
-      root.style.setProperty('--bg-card', 'rgba(255, 255, 255, 0.72)');
-      root.style.setProperty('--bg-card-solid', '#F5F7FA');
-      root.style.setProperty('--bg-sidebar', 'rgba(240, 243, 248, 0.92)');
-      root.style.setProperty('--bg-hover', 'rgba(0, 0, 0, 0.04)');
-      root.style.setProperty('--border-subtle', 'rgba(0, 0, 0, 0.08)');
-      root.style.setProperty('--border-hover', 'rgba(0, 0, 0, 0.14)');
-      root.style.setProperty('--text-primary', 'rgba(15, 23, 42, 0.92)');
-      root.style.setProperty('--text-secondary', 'rgba(51, 65, 85, 0.85)');
-      root.style.setProperty('--text-muted', 'rgba(100, 116, 139, 0.7)');
+      root.setAttribute('data-theme', 'glass-light');
       root.style.colorScheme = 'light';
       document.body.style.background = '#E8ECF2';
     } else {
-      root.style.setProperty('--bg-base', '#070B14');
-      root.style.setProperty('--bg-card', 'rgba(14, 20, 36, 0.78)');
-      root.style.setProperty('--bg-card-solid', '#0E1424');
-      root.style.setProperty('--bg-sidebar', 'rgba(7, 11, 20, 0.90)');
-      root.style.setProperty('--bg-hover', 'rgba(255, 255, 255, 0.04)');
-      root.style.setProperty('--border-subtle', 'rgba(255, 255, 255, 0.08)');
-      root.style.setProperty('--border-hover', 'rgba(255, 255, 255, 0.14)');
-      root.style.setProperty('--text-primary', 'rgba(226, 232, 240, 0.92)');
-      root.style.setProperty('--text-secondary', 'rgba(148, 163, 184, 0.85)');
-      root.style.setProperty('--text-muted', 'rgba(148, 163, 184, 0.7)');
+      root.removeAttribute('data-theme');
       root.style.colorScheme = 'dark';
       document.body.style.background = '#070B14';
     }
+    // Reset inline overrides — let CSS variables from app.css handle it
+    const varProps = ['--bg-base','--bg-card','--bg-card-solid','--bg-sidebar','--bg-hover',
+      '--border-subtle','--border-hover','--text-primary','--text-secondary','--text-muted'];
+    varProps.forEach(p => root.style.removeProperty(p));
     saveTheme();
   }
 
@@ -491,12 +493,31 @@
             <div class="icon-editor-grid">
               {#each moduleList as mod}
                 <div class="icon-editor-item">
-                  <span class="icon-editor-current">{general.module_icons?.[mod.key] || mod.emoji}</span>
-                  <input type="text" class="icon-editor-input"
-                    value={general.module_icons?.[mod.key] || mod.emoji}
-                    maxlength="2"
-                    on:change={(e) => setModuleIcon(mod.key, e.target.value)} />
+                  <button class="icon-editor-btn" on:click={() => iconPickerOpen = iconPickerOpen === mod.key ? null : mod.key}>
+                    <span class="icon-editor-current">{general.module_icons?.[mod.key] || mod.emoji}</span>
+                    <span class="icon-editor-edit">{'\u270F\uFE0F'}</span>
+                  </button>
                   <span class="icon-editor-label">{mod.label}</span>
+
+                  {#if iconPickerOpen === mod.key}
+                    <div class="emoji-picker-popup">
+                      <div class="emoji-picker-arrow"></div>
+                      {#each emojiCategories as cat}
+                        <div class="emoji-cat-label">{cat.label}</div>
+                        <div class="emoji-cat-grid">
+                          {#each cat.emojis as em}
+                            <button class="emoji-option" class:selected={(general.module_icons?.[mod.key] || mod.emoji) === em}
+                              on:click={() => selectModuleIcon(mod.key, em)}>
+                              {em}
+                            </button>
+                          {/each}
+                        </div>
+                      {/each}
+                      <button class="emoji-reset-btn" on:click={() => selectModuleIcon(mod.key, mod.emoji)}>
+                        {'\u21A9\uFE0F'} R{'\u00e9'}initialiser
+                      </button>
+                    </div>
+                  {/if}
                 </div>
               {/each}
             </div>
@@ -1109,29 +1130,127 @@
   /* Icon editor */
   .icon-editor-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
     gap: 8px;
   }
   .icon-editor-item {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 10px 6px;
+    background: var(--overlay-white-5, rgba(0,0,0,0.15));
+    border-radius: 10px;
+  }
+  .icon-editor-btn {
+    position: relative;
+    background: none;
+    border: 2px solid transparent;
+    border-radius: 12px;
+    padding: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 6px 10px;
-    background: rgba(0,0,0,0.15);
-    border-radius: 8px;
+    justify-content: center;
   }
-  .icon-editor-current { font-size: 1.2rem; }
-  .icon-editor-input {
-    width: 36px;
-    text-align: center;
-    font-size: 1rem;
-    padding: 4px !important;
-    border-radius: 6px !important;
+  .icon-editor-btn:hover {
+    border-color: var(--accent);
+    background: var(--bg-hover);
   }
+  .icon-editor-current { font-size: 1.6rem; }
+  .icon-editor-edit {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    font-size: 0.6rem;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .icon-editor-btn:hover .icon-editor-edit { opacity: 1; }
   .icon-editor-label {
-    font-size: 0.75rem;
-    color: var(--text-dim, #94A3B8);
-    flex: 1;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    text-align: center;
+  }
+
+  /* Emoji picker popup */
+  .emoji-picker-popup {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    width: 280px;
+    max-height: 320px;
+    overflow-y: auto;
+    background: var(--bg-card-solid, #0E1424);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    padding: 10px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    margin-top: 6px;
+  }
+  .emoji-picker-arrow {
+    position: absolute;
+    top: -6px;
+    left: 50%;
+    transform: translateX(-50%) rotate(45deg);
+    width: 12px;
+    height: 12px;
+    background: var(--bg-card-solid, #0E1424);
+    border-left: 1px solid var(--border-subtle);
+    border-top: 1px solid var(--border-subtle);
+  }
+  .emoji-cat-label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    padding: 6px 2px 3px;
+    margin-top: 2px;
+  }
+  .emoji-cat-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 2px;
+  }
+  .emoji-option {
+    background: none;
+    border: 2px solid transparent;
+    border-radius: 6px;
+    padding: 3px;
+    font-size: 1.15rem;
+    cursor: pointer;
+    transition: all 0.12s;
+    text-align: center;
+    line-height: 1.2;
+  }
+  .emoji-option:hover {
+    background: var(--bg-hover);
+    transform: scale(1.2);
+  }
+  .emoji-option.selected {
+    border-color: var(--accent);
+    background: rgba(var(--accent-rgb), 0.15);
+  }
+  .emoji-reset-btn {
+    width: 100%;
+    margin-top: 8px;
+    padding: 5px;
+    background: var(--overlay-white-5, rgba(255,255,255,0.05));
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-size: 0.72rem;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .emoji-reset-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
   }
 
   /* ── General ──────────────────────────────────────────── */

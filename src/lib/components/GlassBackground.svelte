@@ -11,6 +11,11 @@
   let targetMouseX = 0.5;
   let targetMouseY = 0.5;
   let startTime = Date.now();
+  let isLightTheme = false;
+
+  function checkTheme() {
+    isLightTheme = document.documentElement.getAttribute('data-theme') === 'glass-light';
+  }
 
   // --- Particle Network ---
   const PARTICLE_COUNT = 38;
@@ -152,8 +157,17 @@
     mouseX += (targetMouseX - mouseX) * 0.03;
     mouseY += (targetMouseY - mouseY) * 0.03;
 
+    // Check theme each frame (cheap operation)
+    checkTheme();
+
     // Clear
     ctx.clearRect(0, 0, width, height);
+
+    // Light theme base fill
+    if (isLightTheme) {
+      ctx.fillStyle = '#E8ECF2';
+      ctx.fillRect(0, 0, width, height);
+    }
 
     // --- Draw Orbes ---
     for (const orb of orbes) {
@@ -167,9 +181,10 @@
       const cx = ox + px;
       const cy = oy + py;
 
+      const orbAlpha = isLightTheme ? orb.alpha * 0.5 : orb.alpha;
       const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, orb.radius);
-      gradient.addColorStop(0, `rgba(${orb.color[0]}, ${orb.color[1]}, ${orb.color[2]}, ${orb.alpha})`);
-      gradient.addColorStop(0.4, `rgba(${orb.color[0]}, ${orb.color[1]}, ${orb.color[2]}, ${orb.alpha * 0.5})`);
+      gradient.addColorStop(0, `rgba(${orb.color[0]}, ${orb.color[1]}, ${orb.color[2]}, ${orbAlpha})`);
+      gradient.addColorStop(0.4, `rgba(${orb.color[0]}, ${orb.color[1]}, ${orb.color[2]}, ${orbAlpha * 0.5})`);
       gradient.addColorStop(1, `rgba(${orb.color[0]}, ${orb.color[1]}, ${orb.color[2]}, 0)`);
 
       ctx.fillStyle = gradient;
@@ -208,7 +223,9 @@
         if (distSq < CONNECTION_DIST_SQ) {
           const dist = Math.sqrt(distSq);
           const alpha = (1 - dist / CONNECTION_DIST) * 0.15;
-          ctx.strokeStyle = `rgba(180, 200, 240, ${alpha})`;
+          ctx.strokeStyle = isLightTheme
+            ? `rgba(80, 100, 140, ${alpha})`
+            : `rgba(180, 200, 240, ${alpha})`;
           ctx.beginPath();
           ctx.moveTo(particles[i].x, particles[i].y);
           ctx.lineTo(particles[j].x, particles[j].y);
@@ -219,22 +236,26 @@
 
     // Draw particles
     for (const p of particles) {
-      ctx.fillStyle = `rgba(180, 200, 240, ${p.alpha})`;
+      ctx.fillStyle = isLightTheme
+        ? `rgba(80, 100, 140, ${p.alpha * 0.6})`
+        : `rgba(180, 200, 240, ${p.alpha})`;
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    // --- Vignette ---
-    const vignetteGradient = ctx.createRadialGradient(
-      width * 0.5, height * 0.5, Math.min(width, height) * 0.25,
-      width * 0.5, height * 0.5, Math.max(width, height) * 0.75
-    );
-    vignetteGradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
-    vignetteGradient.addColorStop(0.7, 'rgba(0, 0, 0, 0.05)');
-    vignetteGradient.addColorStop(1, 'rgba(0, 0, 0, 0.35)');
-    ctx.fillStyle = vignetteGradient;
-    ctx.fillRect(0, 0, width, height);
+    // --- Vignette (dark only) ---
+    if (!isLightTheme) {
+      const vignetteGradient = ctx.createRadialGradient(
+        width * 0.5, height * 0.5, Math.min(width, height) * 0.25,
+        width * 0.5, height * 0.5, Math.max(width, height) * 0.75
+      );
+      vignetteGradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
+      vignetteGradient.addColorStop(0.7, 'rgba(0, 0, 0, 0.05)');
+      vignetteGradient.addColorStop(1, 'rgba(0, 0, 0, 0.35)');
+      ctx.fillStyle = vignetteGradient;
+      ctx.fillRect(0, 0, width, height);
+    }
 
     animationId = requestAnimationFrame(draw);
   }
