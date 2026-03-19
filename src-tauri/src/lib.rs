@@ -80,10 +80,15 @@ fn kill_backend(handle: &tauri::AppHandle) {
     #[cfg(target_os = "windows")]
     {
         use std::os::windows::process::CommandExt;
-        let _ = std::process::Command::new("taskkill")
-            .args(["/F", "/IM", "backend.exe"])
-            .creation_flags(0x08000000)
-            .output();
+        // Kill ALL possible process names — sidecar runs as backend-x86_64-pc-windows-msvc.exe
+        // but NSIS installs it as backend.exe too
+        for name in ["backend.exe", "backend-x86_64-pc-windows-msvc.exe"] {
+            log::info!("taskkill /F /IM {}", name);
+            let _ = std::process::Command::new("taskkill")
+                .args(["/F", "/IM", name])
+                .creation_flags(0x08000000)
+                .output();
+        }
     }
 }
 
