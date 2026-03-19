@@ -3,6 +3,7 @@
   import { currentPage } from './lib/stores/navigation.js';
   import { loadSettings } from './lib/stores/settings.js';
   import GlassBackground from './lib/components/GlassBackground.svelte';
+  import SplashScreen from './lib/components/SplashScreen.svelte';
   import Sidebar from './lib/components/Sidebar.svelte';
   import Toast from './lib/components/Toast.svelte';
   import SearchPalette from './lib/components/SearchPalette.svelte';
@@ -22,6 +23,7 @@
   import SettingsPage from './lib/pages/SettingsPage.svelte';
 
   let showSearch = false;
+  let splashDone = false;
 
   onMount(() => {
     loadSettings();
@@ -38,9 +40,12 @@
   });
 </script>
 
+<SplashScreen on:done={() => splashDone = true} />
+
 <GlassBackground />
 
-<Sidebar />
+{#if splashDone}
+  <Sidebar />
 
 <main class="content">
   {#if $currentPage === '/'}
@@ -78,6 +83,7 @@
 
 {#if showSearch}
   <SearchPalette on:close={() => showSearch = false} />
+{/if}
 {/if}
 
 <style>

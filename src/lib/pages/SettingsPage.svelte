@@ -27,9 +27,6 @@
   let newFeedUrl = '';
   let newFeedCategory = 'Autre';
 
-  // RDP status
-  let rdpStatus = { docker: {}, guacd: {}, ready: false };
-
   // DB info
   let dbInfo = null;
   let dbCheckResult = null;
@@ -91,7 +88,7 @@
     { key: 'security', label: 'S\u00e9curit\u00e9', emoji: '\u{1F6E1}\uFE0F' },
     { key: 'wiki', label: 'Proc\u00e9dures', emoji: '\u{1F4D6}' },
     { key: 'changelog', label: 'Changelog', emoji: '\u{1F4CB}' },
-    { key: 'bastion', label: 'Bastion', emoji: '\u{1F50C}' },
+    { key: 'monitoring', label: 'Monitoring', emoji: '\u{1F4CA}' },
     { key: 'tools', label: 'Outils', emoji: '\u{1F527}' },
   ];
 
@@ -107,13 +104,14 @@
   ];
 
   onMount(async () => {
-    await Promise.all([loadTheme(), loadGeneral(), loadFeeds(), loadRdpStatus(), loadAutoBackup()]);
+    await Promise.all([loadTheme(), loadGeneral(), loadFeeds(), loadAutoBackup()]);
   });
 
   async function loadTheme() {
     try {
       const res = await fetch(`${API}/theme`);
       theme = await res.json();
+      if (theme.theme) applyTheme(theme.theme);
     } catch(e) {}
   }
 
@@ -128,13 +126,6 @@
     try {
       const res = await fetch(`${API}/rss-feeds`);
       feeds = await res.json();
-    } catch(e) {}
-  }
-
-  async function loadRdpStatus() {
-    try {
-      const res = await fetch('http://localhost:8010/api/bastion/rdp-check');
-      rdpStatus = await res.json();
     } catch(e) {}
   }
 
@@ -203,6 +194,44 @@
 
   function setAccent(color) { theme.accent = color; saveTheme(); }
   function setBrandIcon(icon) { theme.brand_icon = icon; saveTheme(); }
+
+  function applyTheme(themeName) {
+    const root = document.documentElement;
+    if (themeName === 'glass-light') {
+      root.style.setProperty('--bg-base', '#E8ECF2');
+      root.style.setProperty('--bg-card', 'rgba(255, 255, 255, 0.72)');
+      root.style.setProperty('--bg-card-solid', '#F5F7FA');
+      root.style.setProperty('--bg-sidebar', 'rgba(240, 243, 248, 0.92)');
+      root.style.setProperty('--bg-hover', 'rgba(0, 0, 0, 0.04)');
+      root.style.setProperty('--border-subtle', 'rgba(0, 0, 0, 0.08)');
+      root.style.setProperty('--border-hover', 'rgba(0, 0, 0, 0.14)');
+      root.style.setProperty('--text-primary', 'rgba(15, 23, 42, 0.92)');
+      root.style.setProperty('--text-secondary', 'rgba(51, 65, 85, 0.85)');
+      root.style.setProperty('--text-muted', 'rgba(100, 116, 139, 0.7)');
+      root.style.colorScheme = 'light';
+      document.body.style.background = '#E8ECF2';
+    } else {
+      root.style.setProperty('--bg-base', '#070B14');
+      root.style.setProperty('--bg-card', 'rgba(14, 20, 36, 0.78)');
+      root.style.setProperty('--bg-card-solid', '#0E1424');
+      root.style.setProperty('--bg-sidebar', 'rgba(7, 11, 20, 0.90)');
+      root.style.setProperty('--bg-hover', 'rgba(255, 255, 255, 0.04)');
+      root.style.setProperty('--border-subtle', 'rgba(255, 255, 255, 0.08)');
+      root.style.setProperty('--border-hover', 'rgba(255, 255, 255, 0.14)');
+      root.style.setProperty('--text-primary', 'rgba(226, 232, 240, 0.92)');
+      root.style.setProperty('--text-secondary', 'rgba(148, 163, 184, 0.85)');
+      root.style.setProperty('--text-muted', 'rgba(148, 163, 184, 0.7)');
+      root.style.colorScheme = 'dark';
+      document.body.style.background = '#070B14';
+    }
+    saveTheme();
+  }
+
+  function setModuleIcon(key, icon) {
+    if (!general.module_icons) general.module_icons = {};
+    general.module_icons[key] = icon || undefined;
+    saveGeneral();
+  }
 
   // ── RSS Feeds ─────────────────────────────────────────
   async function addFeed() {
@@ -445,10 +474,31 @@
           <div class="setting-section">
             <h3>Th{'\u00e8'}me</h3>
             <div class="theme-options">
-              <button class="theme-card" class:active={theme.theme === 'glass'} on:click={() => { theme.theme = 'glass'; saveTheme(); }}>
+              <button class="theme-card" class:active={theme.theme === 'glass'} on:click={() => { theme.theme = 'glass'; applyTheme('glass'); }}>
                 <div class="theme-preview glass-preview"></div>
                 <span>Glass Dark</span>
               </button>
+              <button class="theme-card" class:active={theme.theme === 'glass-light'} on:click={() => { theme.theme = 'glass-light'; applyTheme('glass-light'); }}>
+                <div class="theme-preview glass-light-preview"></div>
+                <span>Glass Light</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="setting-section">
+            <h3>Ic{'\u00f4'}ne des modules</h3>
+            <p class="setting-desc">Personnalisez les ic{'\u00f4'}nes affich{'\u00e9'}es dans la barre lat{'\u00e9'}rale.</p>
+            <div class="icon-editor-grid">
+              {#each moduleList as mod}
+                <div class="icon-editor-item">
+                  <span class="icon-editor-current">{general.module_icons?.[mod.key] || mod.emoji}</span>
+                  <input type="text" class="icon-editor-input"
+                    value={general.module_icons?.[mod.key] || mod.emoji}
+                    maxlength="2"
+                    on:change={(e) => setModuleIcon(mod.key, e.target.value)} />
+                  <span class="icon-editor-label">{mod.label}</span>
+                </div>
+              {/each}
             </div>
           </div>
         </div>
@@ -665,37 +715,6 @@
                   </button>
                 </div>
               </div>
-            </div>
-          </div>
-
-          <div class="integration-card">
-            <div class="int-header">
-              <span class="int-icon">{'\u{1F5A5}\uFE0F'}</span>
-              <div class="int-info">
-                <h3>RDP int{'\u00e9'}gr{'\u00e9'} (Guacamole)</h3>
-                <p>Bureau {'\u00e0'} distance dans le navigateur via Docker + guacd</p>
-              </div>
-              <span class="int-badge" class:active-badge={rdpStatus.ready} class:soon={!rdpStatus.ready}>
-                {rdpStatus.ready ? 'Actif' : 'Inactif'}
-              </span>
-            </div>
-            <div class="gw-config-form">
-              <div class="gw-status-grid">
-                <div class="gw-status-item">
-                  <span>{rdpStatus.docker?.installed ? '\u2705' : '\u274C'}</span>
-                  <span>Docker : {rdpStatus.docker?.installed ? (rdpStatus.docker?.running ? 'En cours' : 'Arrêté') : 'Non installé'}</span>
-                </div>
-                <div class="gw-status-item">
-                  <span>{rdpStatus.guacd?.port_reachable ? '\u2705' : '\u274C'}</span>
-                  <span>guacd : {rdpStatus.guacd?.port_reachable ? 'Actif (port 4822)' : 'Inactif'}</span>
-                </div>
-              </div>
-              <div style="display:flex;gap:8px;margin-top:8px">
-                <button class="btn-small" on:click={loadRdpStatus}>{'\u{1F504}'} Rafra{'\u00ee'}chir</button>
-              </div>
-              <p class="gw-help">
-                Configurez le RDP int{'\u00e9'}gr{'\u00e9'} depuis la page <strong>Bastion</strong> {'\u2192'} bouton "RDP Fichier" dans l'en-t{'\u00ea'}te.
-              </p>
             </div>
           </div>
 
@@ -1081,6 +1100,38 @@
   .glass-preview {
     background: linear-gradient(135deg, #0D1826 0%, #1a2740 50%, #0D1826 100%);
     border: 1px solid rgba(255,255,255,0.06);
+  }
+  .glass-light-preview {
+    background: linear-gradient(135deg, #E8ECF2 0%, #F5F7FA 50%, #E0E5ED 100%);
+    border: 1px solid rgba(0,0,0,0.1);
+  }
+
+  /* Icon editor */
+  .icon-editor-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 8px;
+  }
+  .icon-editor-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: rgba(0,0,0,0.15);
+    border-radius: 8px;
+  }
+  .icon-editor-current { font-size: 1.2rem; }
+  .icon-editor-input {
+    width: 36px;
+    text-align: center;
+    font-size: 1rem;
+    padding: 4px !important;
+    border-radius: 6px !important;
+  }
+  .icon-editor-label {
+    font-size: 0.75rem;
+    color: var(--text-dim, #94A3B8);
+    flex: 1;
   }
 
   /* ── General ──────────────────────────────────────────── */
