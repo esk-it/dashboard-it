@@ -141,6 +141,15 @@ async fn check_for_updates(handle: tauri::AppHandle) -> Result<(), Box<dyn std::
             Err(e) => log::warn!("Pre-update backup failed: {}", e),
         }
 
+        // Kill backend BEFORE download+install so the exe is not locked during NSIS install
+        log::info!("Killing backend before update...");
+        kill_backend(&handle);
+        // Give it time to fully terminate
+        let kill_delay = std::time::Duration::from_millis(1500);
+        tauri::async_runtime::spawn_blocking(move || std::thread::sleep(kill_delay)).await.ok();
+        // Double-kill to be sure (taskkill fallback)
+        kill_backend(&handle);
+
         // Download and install with progress
         let handle_dl = handle.clone();
         let mut downloaded: usize = 0;
@@ -177,16 +186,14 @@ async fn check_for_updates(handle: tauri::AppHandle) -> Result<(), Box<dyn std::
                     );
                 }
 
-                // Kill backend before restart
+                // Final safety kill in case backend respawned somehow
                 kill_backend(&handle);
 
-                let delay = std::time::Duration::from_secs(3);
+                let delay = std::time::Duration::from_secs(2);
                 tauri::async_runtime::spawn_blocking(move || std::thread::sleep(delay)).await.ok();
 
                 log::info!("Restarting app now...");
-                // Try restart, fallback to process::exit to let NSIS installer take over
-                handle.restart();
-                // If restart() didn't kill the process (shouldn't happen), force exit
+                // Force exit to let NSIS installer take over
                 std::process::exit(0);
             }
             Err(e) => {
