@@ -40,6 +40,7 @@
   let backups = [];
   let backupRunning = false;
   let backupResult = null;
+  let autoBackup = { enabled: true, interval_hours: 6 };
 
   // Danger zone
   let showResetConfirm = false;
@@ -106,7 +107,7 @@
   ];
 
   onMount(async () => {
-    await Promise.all([loadTheme(), loadGeneral(), loadFeeds(), loadRdpStatus()]);
+    await Promise.all([loadTheme(), loadGeneral(), loadFeeds(), loadRdpStatus(), loadAutoBackup()]);
   });
 
   async function loadTheme() {
@@ -149,6 +150,22 @@
       const res = await fetch(`${API}/backups`);
       backups = await res.json();
     } catch(e) {}
+  }
+
+  async function loadAutoBackup() {
+    try {
+      const res = await fetch(`${API}/auto-backup`);
+      autoBackup = await res.json();
+    } catch(e) {}
+  }
+
+  async function saveAutoBackup() {
+    await fetch(`${API}/auto-backup`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(autoBackup),
+    });
+    showSaved();
   }
 
   async function saveTheme() {
@@ -813,11 +830,38 @@
         <div class="panel">
           <h2>{'\u{1F4BE}'} Sauvegarde</h2>
 
+          <!-- Auto-backup config -->
           <div class="setting-section">
-            <h3>Cr{'\u00e9'}er une sauvegarde</h3>
+            <h3>{'\u{1F504}'} Sauvegarde automatique</h3>
+            <p class="setting-desc">
+              Une sauvegarde automatique est cr{'\u00e9'}{'\u00e9'}e p{'\u00e9'}riodiquement en arri{'\u00e8'}re-plan.
+              Une sauvegarde est aussi cr{'\u00e9'}{'\u00e9'}e automatiquement avant chaque mise {'\u00e0'} jour.
+            </p>
+            <div class="setting-row">
+              <label class="toggle-label">
+                <input type="checkbox" bind:checked={autoBackup.enabled} on:change={saveAutoBackup} />
+                <span>Activ{'\u00e9'}e</span>
+              </label>
+            </div>
+            <div class="setting-row" style="margin-top:8px;">
+              <label class="setting-label">Intervalle (heures)</label>
+              <select bind:value={autoBackup.interval_hours} on:change={saveAutoBackup} class="setting-select">
+                <option value={1}>1h</option>
+                <option value={3}>3h</option>
+                <option value={6}>6h</option>
+                <option value={12}>12h</option>
+                <option value={24}>24h</option>
+                <option value={48}>48h</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Manual backup -->
+          <div class="setting-section">
+            <h3>Cr{'\u00e9'}er une sauvegarde manuelle</h3>
             <p class="setting-desc">
               La sauvegarde inclut la base de donn{'\u00e9'}es, les param{'\u00e8'}tres, les flux RSS et les logos.
-              Les 10 derni{'\u00e8'}res sauvegardes sont conserv{'\u00e9'}es.
+              Les 10 derni{'\u00e8'}res sauvegardes de chaque type sont conserv{'\u00e9'}es.
             </p>
             <button class="btn-backup" on:click={createBackup} disabled={backupRunning}>
               {#if backupRunning}
@@ -838,13 +882,14 @@
 
           <div class="setting-section">
             <h3>Sauvegardes existantes ({backups.length})</h3>
+            <button class="btn-small" on:click={() => loadBackups()} style="margin-bottom:8px;">{'\u{1F504}'} Rafra{'\u00ee'}chir</button>
             {#if backups.length === 0}
               <p class="setting-desc">Aucune sauvegarde trouv{'\u00e9'}e.</p>
             {:else}
               <div class="backups-list">
                 {#each backups as backup}
                   <div class="backup-item">
-                    <span class="backup-icon">{'\u{1F4E6}'}</span>
+                    <span class="backup-type" class:auto={backup.type === 'Auto'} class:pre-maj={backup.type === 'Pré-MAJ'} class:pre-reset={backup.type === 'Pré-reset'}>{backup.type || 'Manuel'}</span>
                     <span class="backup-name">{backup.filename}</span>
                     <span class="backup-size">{backup.size_human}</span>
                     <span class="backup-date">{new Date(backup.modified).toLocaleString('fr-FR')}</span>
@@ -1629,7 +1674,19 @@
     border-radius: 8px;
     font-size: 0.8rem;
   }
-  .backup-icon { font-size: 0.9rem; }
+  .backup-type {
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.1);
+    color: var(--text-dim, #94a3b8);
+    min-width: 60px;
+    text-align: center;
+  }
+  .backup-type.auto { background: rgba(16,185,129,0.2); color: #10b981; }
+  .backup-type.pre-maj { background: rgba(139,92,246,0.2); color: #8b5cf6; }
+  .backup-type.pre-reset { background: rgba(239,68,68,0.2); color: #ef4444; }
   .backup-name {
     flex: 1;
     color: var(--text, #E6EAF2);

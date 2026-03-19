@@ -99,6 +99,17 @@ async fn check_for_updates(handle: tauri::AppHandle) -> Result<(), Box<dyn std::
         let version = update.version.clone();
         log::info!("Update available: {}", version);
 
+        // Backup database before update
+        if let Some(window) = handle.get_webview_window("main") {
+            let _ = window.eval("console.log('[Updater] Creating pre-update backup...')");
+        }
+        log::info!("Creating pre-update backup...");
+        let backup_client = reqwest::Client::new();
+        match backup_client.post("http://localhost:8010/api/settings/backup/pre-update").send().await {
+            Ok(resp) => log::info!("Pre-update backup response: {}", resp.status()),
+            Err(e) => log::warn!("Pre-update backup failed (continuing anyway): {}", e),
+        }
+
         // Show update overlay with progress bar
         if let Some(window) = handle.get_webview_window("main") {
             let _ = window.eval(&format!(r#"
@@ -107,7 +118,7 @@ async fn check_for_updates(handle: tauri::AppHandle) -> Result<(), Box<dyn std::
                     overlay.id = '__update_overlay';
                     overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:99999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px)';
                     overlay.innerHTML = '<div style="background:#1a1a2e;border-radius:16px;padding:40px;min-width:400px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.1)">' +
-                        '<div style="font-size:40px;margin-bottom:16px">⬇️</div>' +
+                        '<div style="font-size:40px;margin-bottom:16px">{{"⬇️"}}</div>' +
                         '<div style="color:#fff;font-size:18px;font-weight:600;margin-bottom:8px">Mise à jour v{}</div>' +
                         '<div id="__update_status" style="color:rgba(255,255,255,0.6);font-size:13px;margin-bottom:20px">Téléchargement en cours...</div>' +
                         '<div style="background:rgba(255,255,255,0.1);border-radius:8px;height:8px;overflow:hidden;margin-bottom:12px">' +

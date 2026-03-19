@@ -3,12 +3,14 @@ Router Settings — General settings, theme, RSS feeds, DB info, export, backup.
 """
 from __future__ import annotations
 
+import asyncio
 import csv
 import io
 import json
 import os
 import shutil
 import sqlite3
+import threading
 import zipfile
 from datetime import datetime
 from pathlib import Path
@@ -27,6 +29,97 @@ else:
 OLD_PROJECT_DIR = Path(r"C:\Users\jdeniel\Documents\Projets\Dashboard - claude code")
 BACKUP_DIR = BASE_DIR / "backups"
 BACKUP_DIR.mkdir(exist_ok=True)
+
+# ── Auto-backup scheduler ────────────────────────────────────────────────────
+_auto_backup_thread: threading.Thread | None = None
+_auto_backup_stop = threading.Event()
+
+AUTO_BACKUP_FILE = BACKEND_DIR / "data" / "auto_backup_settings.json"
+
+def _get_auto_backup_settings() -> dict:
+    defaults = {"enabled": True, "interval_hours": 6}
+    if AUTO_BACKUP_FILE.exists():
+        try:
+            return {**defaults, **json.loads(AUTO_BACKUP_FILE.read_text("utf-8"))}
+        except Exception:
+            pass
+    return defaults
+
+def _save_auto_backup_settings(settings: dict):
+    AUTO_BACKUP_FILE.parent.mkdir(parents=True, exist_ok=True)
+    AUTO_BACKUP_FILE.write_text(json.dumps(settings, indent=2), "utf-8")
+
+def _do_backup(prefix: str = "backup") -> str | None:
+    """Synchronous backup — can be called from any thread."""
+    try:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        zip_name = f"{prefix}_{timestamp}.zip"
+        zip_path = BACKUP_DIR / zip_name
+
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            if DB_PATH.exists():
+                zf.write(DB_PATH, "dashboard.db")
+            for name, path in [
+                ("general_settings.json", BACKEND_DIR / "data" / "general_settings.json"),
+                ("settings.json", BACKEND_DIR / "data" / "settings.json"),
+                ("rss_feeds.json", BACKEND_DIR / "data" / "rss_feeds.json"),
+            ]:
+                if path.exists():
+                    zf.write(path, name)
+            logos_dir = BACKEND_DIR / "logos"
+            if logos_dir.exists():
+                for f in logos_dir.iterdir():
+                    if f.is_file():
+                        zf.write(f, f"logos/{f.name}")
+
+        # Rotation: keep last 10 auto + 10 manual
+        for pattern in ["backup_*.zip", "auto_backup_*.zip"]:
+            existing = sorted(BACKUP_DIR.glob(pattern), key=lambda p: p.stat().st_mtime, reverse=True)
+            for old in existing[10:]:
+                old.unlink()
+
+        return zip_name
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return None
+
+def _auto_backup_loop():
+    """Background thread that creates periodic backups."""
+    while not _auto_backup_stop.is_set():
+        settings = _get_auto_backup_settings()
+        if not settings.get("enabled", True):
+            _auto_backup_stop.wait(60)  # check again in 1 min
+            continue
+        interval = settings.get("interval_hours", 6) * 3600
+        # Check if a recent backup already exists
+        existing = sorted(BACKUP_DIR.glob("auto_backup_*.zip"), key=lambda p: p.stat().st_mtime, reverse=True)
+        if existing:
+            last_time = existing[0].stat().st_mtime
+            elapsed = datetime.now().timestamp() - last_time
+            if elapsed < interval:
+                wait_time = interval - elapsed
+                _auto_backup_stop.wait(min(wait_time, 300))  # re-check every 5 min max
+                continue
+        print(f"[Auto-backup] Creating automatic backup...")
+        result = _do_backup("auto_backup")
+        if result:
+            print(f"[Auto-backup] Created: {result}")
+        else:
+            print("[Auto-backup] Failed!")
+        _auto_backup_stop.wait(min(interval, 300))
+
+def start_auto_backup():
+    global _auto_backup_thread
+    if _auto_backup_thread and _auto_backup_thread.is_alive():
+        return
+    _auto_backup_stop.clear()
+    _auto_backup_thread = threading.Thread(target=_auto_backup_loop, daemon=True, name="auto-backup")
+    _auto_backup_thread.start()
+    print("[Auto-backup] Scheduler started")
+
+# Start auto-backup on module load
+start_auto_backup()
 
 GENERAL_FILE = BASE_DIR / "general_settings.json"
 THEME_FILE = BACKEND_DIR / "settings.json"
@@ -293,43 +386,34 @@ async def export_documents():
 
 @router.post("/backup")
 async def create_backup():
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    zip_name = f"backup_{timestamp}.zip"
-    zip_path = BACKUP_DIR / zip_name
-
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        if DB_PATH.exists():
-            zf.write(DB_PATH, "dashboard.db")
-        if GENERAL_FILE.exists():
-            zf.write(GENERAL_FILE, "general_settings.json")
-        if THEME_FILE.exists():
-            zf.write(THEME_FILE, "settings.json")
-        if RSS_FILE.exists():
-            zf.write(RSS_FILE, "rss_feeds.json")
-        # Include logos directory if exists
-        logos_dir = BACKEND_DIR / "logos"
-        if logos_dir.exists():
-            for f in logos_dir.iterdir():
-                if f.is_file():
-                    zf.write(f, f"logos/{f.name}")
-
-    # Rotation: keep last 10 backups
-    backups = sorted(BACKUP_DIR.glob("backup_*.zip"), key=lambda p: p.stat().st_mtime, reverse=True)
-    for old in backups[10:]:
-        old.unlink()
-
+    result = _do_backup("backup")
+    if not result:
+        return {"error": "Échec de la sauvegarde"}
+    zip_path = BACKUP_DIR / result
     return {
-        "filename": zip_name,
+        "filename": result,
         "size": zip_path.stat().st_size,
-        "timestamp": timestamp,
+        "timestamp": datetime.now().strftime("%Y%m%d_%H%M%S"),
     }
+
+
+@router.post("/backup/pre-update")
+async def pre_update_backup():
+    """Backup before applying an update — called by Tauri updater."""
+    result = _do_backup("pre_update")
+    if not result:
+        return {"ok": False, "error": "Backup failed"}
+    return {"ok": True, "filename": result}
 
 
 @router.get("/backups")
 async def list_backups():
-    backups = sorted(BACKUP_DIR.glob("backup_*.zip"), key=lambda p: p.stat().st_mtime, reverse=True)
+    all_backups = []
+    for pattern in ["backup_*.zip", "auto_backup_*.zip", "pre_update_*.zip", "pre_reset_*.zip"]:
+        all_backups.extend(BACKUP_DIR.glob(pattern))
+    all_backups.sort(key=lambda p: p.stat().st_mtime, reverse=True)
     result = []
-    for b in backups:
+    for b in all_backups:
         stat = b.stat()
         sz = stat.st_size
         if sz < 1024:
@@ -338,13 +422,43 @@ async def list_backups():
             size_human = f"{sz / 1024:.1f} KB"
         else:
             size_human = f"{sz / (1024 * 1024):.2f} MB"
+        # Determine backup type label
+        name = b.name
+        if name.startswith("auto_backup"):
+            btype = "Auto"
+        elif name.startswith("pre_update"):
+            btype = "Pré-MAJ"
+        elif name.startswith("pre_reset"):
+            btype = "Pré-reset"
+        else:
+            btype = "Manuel"
         result.append({
-            "filename": b.name,
+            "filename": name,
+            "type": btype,
             "size": sz,
             "size_human": size_human,
             "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
         })
     return result
+
+
+@router.get("/auto-backup")
+async def get_auto_backup_settings():
+    return _get_auto_backup_settings()
+
+
+@router.put("/auto-backup")
+async def set_auto_backup_settings(payload: dict = Body(...)):
+    settings = _get_auto_backup_settings()
+    if "enabled" in payload:
+        settings["enabled"] = bool(payload["enabled"])
+    if "interval_hours" in payload:
+        settings["interval_hours"] = max(1, min(168, int(payload["interval_hours"])))
+    _save_auto_backup_settings(settings)
+    # Restart scheduler
+    _auto_backup_stop.set()
+    start_auto_backup()
+    return settings
 
 
 # ── Danger zone ──────────────────────────────────────────────────────────────
