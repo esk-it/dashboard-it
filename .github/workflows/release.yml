@@ -128,12 +128,28 @@ jobs:
           echo "=== SIGNATURE PREVIEW ==="
           echo "${NSIS_ZIP_SIG:0:60}..."
 
+          # ── Extract release notes from commit message ──
+          # The commit message first line is the title (e.g. "v2.5.0 — Planning full height")
+          # Lines after the first blank line are the details
+          COMMIT_MSG=$(git log -1 --pretty=format:"%B" 2>/dev/null || echo "Nouvelle version du Dashboard IT.")
+          # Take the first line as title, remaining non-empty lines (excluding Co-Authored-By) as notes
+          NOTES_TITLE=$(echo "$COMMIT_MSG" | head -1 | sed 's/^v[0-9.]* . //')
+          NOTES_BODY=$(echo "$COMMIT_MSG" | tail -n +3 | grep -v "^Co-Authored-By" | grep -v "^$" | sed 's/^- /• /' | head -10)
+          if [ -n "$NOTES_BODY" ]; then
+            RELEASE_NOTES="${NOTES_TITLE}\n${NOTES_BODY}"
+          else
+            RELEASE_NOTES="$NOTES_TITLE"
+          fi
+          # Escape for JSON (newlines -> \n, quotes -> \")
+          RELEASE_NOTES_JSON=$(echo "$RELEASE_NOTES" | sed ':a;N;$!ba;s/\n/\\n/g' | sed 's/"/\\"/g')
+          echo "Release notes: $RELEASE_NOTES_JSON"
+
           # ── Build latest.json ──
           NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           NSIS_ZIP_NAME=$(basename "$NSIS_ZIP")
           DOWNLOAD_URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/$NSIS_ZIP_NAME"
 
-          printf '{\n  "version": "%s",\n  "notes": "Nouvelle version du Dashboard IT.",\n  "pub_date": "%s",\n  "platforms": {\n    "windows-x86_64": {\n      "signature": "%s",\n      "url": "%s"\n    }\n  }\n}\n' "$VERSION" "$NOW" "$NSIS_ZIP_SIG" "$DOWNLOAD_URL" > latest.json
+          printf '{\n  "version": "%s",\n  "notes": "%s",\n  "pub_date": "%s",\n  "platforms": {\n    "windows-x86_64": {\n      "signature": "%s",\n      "url": "%s"\n    }\n  }\n}\n' "$VERSION" "$RELEASE_NOTES_JSON" "$NOW" "$NSIS_ZIP_SIG" "$DOWNLOAD_URL" > latest.json
 
           echo ""
           echo "=== latest.json ==="
@@ -145,7 +161,7 @@ jobs:
           gh release create "$TAG" \
             --repo "$GITHUB_REPOSITORY" \
             --title "ITManager Dashboard $TAG" \
-            --notes "Nouvelle version du Dashboard IT." \
+            --notes "$(echo -e "$RELEASE_NOTES")" \
             --latest
 
           sleep 3

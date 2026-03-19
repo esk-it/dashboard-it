@@ -100,12 +100,21 @@ async fn check_for_updates(handle: tauri::AppHandle) -> Result<(), Box<dyn std::
 
     if let Some(update) = update {
         let version = update.version.clone();
-        log::info!("Update available: {}", version);
+        let notes = update.body.clone().unwrap_or_default();
+        log::info!("Update available: {} — notes: {}", version, notes);
+
+        // Build dialog message with release notes
+        let mut msg = format!("Mise \u{00e0} jour v{} disponible.", version);
+        if !notes.is_empty() {
+            msg.push_str("\n\n");
+            msg.push_str(&notes);
+        }
+        msg.push_str("\n\nVoulez-vous mettre \u{00e0} jour maintenant ?");
 
         // Use Tauri dialog plugin for a native OS dialog — reliable and blocking
         use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
         let user_said_yes = handle.dialog()
-            .message(format!("Mise \u{00e0} jour v{} disponible.\n\nVoulez-vous mettre \u{00e0} jour maintenant ?", version))
+            .message(msg)
             .title("Mise \u{00e0} jour ITManager")
             .buttons(MessageDialogButtons::OkCancelCustom("Mettre \u{00e0} jour".to_string(), "Plus tard".to_string()))
             .blocking_show();
