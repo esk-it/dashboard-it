@@ -12,6 +12,7 @@ pub fn run() {
                 .level(log::LevelFilter::Info)
                 .build(),
         )
+        .invoke_handler(tauri::generate_handler![check_update])
         .setup(|app| {
             // Spawn the Python backend as a sidecar process
             let handle = app.handle().clone();
@@ -208,6 +209,14 @@ async fn check_for_updates(handle: tauri::AppHandle) -> Result<(), Box<dyn std::
         }
     }
     Ok(())
+}
+
+#[tauri::command]
+async fn check_update(handle: tauri::AppHandle) -> Result<String, String> {
+    match check_for_updates(handle).await {
+        Ok(_) => Ok("ok".to_string()),
+        Err(e) => Err(format!("{}", e)),
+    }
 }
 
 struct BackendChild(std::sync::Mutex<Option<tauri_plugin_shell::process::CommandChild>>);

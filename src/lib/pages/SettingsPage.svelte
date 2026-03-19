@@ -6,7 +6,7 @@
   let activePanel = 0;
 
   // Theme settings
-  let theme = { theme: 'glass', accent: '#06A6C9', brand_icon: '\u26A1' };
+  let theme = { theme: 'glass', accent: '#06A6C9' };
 
   // General settings
   let general = {
@@ -50,6 +50,30 @@
   let glpiSaving = false;
   let glpiStats = null;
 
+  // Update check
+  let updateChecking = false;
+  let updateResult = null;
+
+  async function manualCheckUpdate() {
+    updateChecking = true;
+    updateResult = null;
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const result = await invoke('check_update');
+      // If we get here without the app restarting, no update was available
+      // or user declined
+      updateResult = 'uptodate';
+    } catch (e) {
+      // If running in browser (dev mode), show friendly message
+      if (e?.toString?.().includes('__TAURI__') || e?.toString?.().includes('invoke')) {
+        updateResult = 'Disponible uniquement dans l\'application desktop.';
+      } else {
+        updateResult = e?.toString?.() || 'Erreur inconnue';
+      }
+    }
+    updateChecking = false;
+  }
+
   // Status
   let saved = false;
   let saveTimer = null;
@@ -76,7 +100,6 @@
     { name: 'Emeraude', color: '#059669' },
   ];
 
-  const brandIcons = ['\u26A1', '\u{1F680}', '\u{1F4BB}', '\u{1F5A5}\uFE0F', '\u{1F6E1}\uFE0F', '\u{1F50C}', '\u{1F527}', '\u{1F3E2}', '\u{1F310}', '\u2699\uFE0F'];
 
   // Emoji picker for module icons
   let iconPickerOpen = null; // key of module currently being edited
@@ -210,7 +233,6 @@
   }
 
   function setAccent(color) { theme.accent = color; saveTheme(); }
-  function setBrandIcon(icon) { theme.brand_icon = icon; saveTheme(); }
 
   function applyTheme(themeName, save = true) {
     const root = document.documentElement;
@@ -463,18 +485,6 @@
           </div>
 
           <div class="setting-section">
-            <h3>Ic{'\u00f4'}ne de marque</h3>
-            <div class="icon-presets">
-              {#each brandIcons as icon}
-                <button class="icon-btn" class:active={theme.brand_icon === icon}
-                  on:click={() => setBrandIcon(icon)}>
-                  {icon}
-                </button>
-              {/each}
-            </div>
-          </div>
-
-          <div class="setting-section">
             <h3>Th{'\u00e8'}me</h3>
             <div class="theme-options">
               <button class="theme-card" class:active={theme.theme === 'glass'} on:click={() => { theme.theme = 'glass'; applyTheme('glass'); }}>
@@ -610,6 +620,21 @@
                 {/if}
               {/each}
             </div>
+          </div>
+
+          <div class="setting-section">
+            <h3>{'\u{1F504}'} Mises {'\u00e0'} jour</h3>
+            <p style="font-size:0.85rem;color:rgba(255,255,255,0.6);margin-bottom:12px">
+              V{'\u00e9'}rifier et installer les mises {'\u00e0'} jour du Dashboard IT.
+            </p>
+            <button class="btn-export" on:click={manualCheckUpdate} disabled={updateChecking}>
+              {updateChecking ? '\u23F3' : '\u{1F504}'} {updateChecking ? 'V\u00e9rification en cours...' : 'V\u00e9rifier les mises \u00e0 jour'}
+            </button>
+            {#if updateResult}
+              <p style="font-size:0.85rem;margin-top:8px;color:{updateResult === 'uptodate' ? '#10B981' : '#EF4444'}">
+                {updateResult === 'uptodate' ? '\u2705 Votre application est \u00e0 jour.' : '\u274C ' + updateResult}
+              </p>
+            {/if}
           </div>
 
           <div class="setting-section">
