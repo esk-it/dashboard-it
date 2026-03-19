@@ -94,18 +94,20 @@ jobs:
             exit 1
           fi
 
-          # Force recreate with standard Deflate via 7-Zip (available on GitHub runners)
-          # IMPORTANT: cd into the dir so the exe is stored at zip root (no subdirectory paths)
+          # Recreate zip with STORE method (no compression = method 0)
+          # The tauri-plugin-updater uses zip crate WITHOUT deflate feature enabled,
+          # so it can ONLY read Store (method 0) zips, not Deflate (method 8).
+          # cd into the dir so the exe is stored at zip root (no subdirectory paths)
           NSIS_DIR=$(dirname "$NSIS_EXE")
           NSIS_EXE_NAME=$(basename "$NSIS_EXE")
           NSIS_ZIP_NAME="${NSIS_EXE_NAME%.exe}.nsis.zip"
           NSIS_ZIP_NEW="$NSIS_DIR/$NSIS_ZIP_NAME"
           rm -f "$NSIS_ZIP_NEW"
-          echo "Creating zip with standard Deflate compression (store at root)..."
+          echo "Creating zip with STORE method (no compression, max compatibility)..."
           pushd "$NSIS_DIR"
-          7z a -tzip -mm=Deflate -mx=5 "$NSIS_ZIP_NAME" "$NSIS_EXE_NAME"
-          echo "Zip contents:"
-          7z l "$NSIS_ZIP_NAME"
+          7z a -tzip -mx=0 "$NSIS_ZIP_NAME" "$NSIS_EXE_NAME"
+          echo "Zip contents (verify Method = Store):"
+          7z l -slt "$NSIS_ZIP_NAME" | grep -E "^(Path|Method|Size)" | head -10
           popd
           NSIS_ZIP="$NSIS_ZIP_NEW"
           echo "Zip created: $(ls -la "$NSIS_ZIP")"
