@@ -1,101 +1,17 @@
 use tauri::Manager;
 use tauri_plugin_updater::UpdaterExt;
 
-#[tauri::command]
-async fn accept_update(handle: tauri::AppHandle) -> Result<String, String> {
-    // This command is called from JS when the user clicks "Mettre à jour"
-    let updater = handle.updater().map_err(|e| e.to_string())?;
-    let update = updater.check().await.map_err(|e| e.to_string())?;
-
-    if let Some(update) = update {
-        let version = update.version.clone();
-
-        // Show progress overlay
-        if let Some(window) = handle.get_webview_window("main") {
-            let _ = window.eval(&format!(
-                "document.getElementById('__update_prompt').style.display='none';\
-                 document.getElementById('__update_progress').style.display='block';\
-                 document.getElementById('__update_version2').textContent='v{}';"
-                , version));
-        }
-
-        // Backup before update
-        log::info!("Creating pre-update backup...");
-        let backup_client = reqwest::Client::new();
-        match backup_client.post("http://localhost:8010/api/settings/backup/pre-update").send().await {
-            Ok(resp) => log::info!("Pre-update backup response: {}", resp.status()),
-            Err(e) => log::warn!("Pre-update backup failed (continuing): {}", e),
-        }
-
-        // Download and install with progress
-        let handle_dl = handle.clone();
-        let mut downloaded: usize = 0;
-        update.download_and_install(
-            move |chunk_length, content_length| {
-                downloaded += chunk_length;
-                if let Some(total) = content_length {
-                    let pct = ((downloaded as f64 / total as f64) * 100.0).min(100.0) as u32;
-                    let mb_down = downloaded as f64 / 1_048_576.0;
-                    let mb_total = total as f64 / 1_048_576.0;
-                    if let Some(window) = handle_dl.get_webview_window("main") {
-                        let _ = window.eval(&format!(
-                            "document.getElementById('__update_bar').style.width='{}%';\
-                             document.getElementById('__update_pct').textContent='{:.1} Mo / {:.1} Mo ({}%)';"
-                            , pct, mb_down, mb_total, pct));
-                    }
-                }
-            },
-            || {
-                log::info!("Download finished, installing...");
-            },
-        ).await.map_err(|e| e.to_string())?;
-
-        // Show "installing" state
-        if let Some(window) = handle.get_webview_window("main") {
-            let _ = window.eval(
-                "document.getElementById('__update_status').textContent='Installation terminée !';\
-                 document.getElementById('__update_bar').style.width='100%';\
-                 document.getElementById('__update_pct').textContent='Redémarrage dans 3 secondes...';"
-            );
-        }
-
-        // Kill backend before restart
-        kill_backend(&handle);
-
-        // Small delay so user sees the message
-        let delay = std::time::Duration::from_secs(3);
-        tauri::async_runtime::spawn_blocking(move || std::thread::sleep(delay)).await.ok();
-
-        log::info!("Update installed, restarting...");
-
-        // Try process::exit to force close — NSIS installer will handle restart
-        handle.restart();
-
-        Ok(format!("Updated to {}", version))
-    } else {
-        Ok("No update".to_string())
-    }
-}
-
-#[tauri::command]
-async fn dismiss_update(handle: tauri::AppHandle) -> Result<(), String> {
-    if let Some(window) = handle.get_webview_window("main") {
-        let _ = window.eval("var o=document.getElementById('__update_overlay');if(o)o.remove();");
-    }
-    Ok(())
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(
             tauri_plugin_log::Builder::default()
                 .level(log::LevelFilter::Info)
                 .build(),
         )
-        .invoke_handler(tauri::generate_handler![accept_update, dismiss_update])
         .setup(|app| {
             // Spawn the Python backend as a sidecar process
             let handle = app.handle().clone();
@@ -104,17 +20,15 @@ pub fn run() {
                 let sidecar = handle.shell().sidecar("backend").unwrap()
                     .args(["--port", "8010"]);
                 let (mut _rx, child) = sidecar.spawn().expect("Failed to spawn backend sidecar");
-
-                // Store the child process so it gets killed when the app exits
                 handle.manage(BackendChild(std::sync::Mutex::new(Some(child))));
             });
 
             // Check for updates in background
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-                // Wait 5 seconds for the window to be ready
-                let five_secs = std::time::Duration::from_secs(5);
-                tauri::async_runtime::spawn_blocking(move || std::thread::sleep(five_secs)).await.ok();
+                // Wait for splash screen + window ready
+                let wait = std::time::Duration::from_secs(8);
+                tauri::async_runtime::spawn_blocking(move || std::thread::sleep(wait)).await.ok();
 
                 let handle_clone = handle.clone();
                 match check_for_updates(handle).await {
@@ -162,13 +76,12 @@ fn kill_backend(handle: &tauri::AppHandle) {
         }
     }
 
-    // Fallback: force kill any remaining backend.exe via taskkill (Windows)
     #[cfg(target_os = "windows")]
     {
         use std::os::windows::process::CommandExt;
         let _ = std::process::Command::new("taskkill")
             .args(["/F", "/IM", "backend.exe"])
-            .creation_flags(0x08000000) // CREATE_NO_WINDOW
+            .creation_flags(0x08000000)
             .output();
     }
 }
@@ -181,46 +94,96 @@ async fn check_for_updates(handle: tauri::AppHandle) -> Result<(), Box<dyn std::
 
     if let Some(update) = update {
         let version = update.version.clone();
-        let body = update.body.clone().unwrap_or_default();
         log::info!("Update available: {}", version);
 
-        // Show confirmation dialog overlay (NOT auto-download)
+        // Use Tauri dialog plugin for a native OS dialog — reliable and blocking
+        use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
+        let user_said_yes = handle.dialog()
+            .message(format!("Mise \u{00e0} jour v{} disponible.\n\nVoulez-vous mettre \u{00e0} jour maintenant ?", version))
+            .title("Mise \u{00e0} jour ITManager")
+            .buttons(MessageDialogButtons::OkCancelCustom("Mettre \u{00e0} jour".to_string(), "Plus tard".to_string()))
+            .blocking_show();
+
+        if !user_said_yes {
+            log::info!("User declined update");
+            return Ok(());
+        }
+
+        log::info!("User accepted update, starting download...");
+
+        // Show progress overlay
         if let Some(window) = handle.get_webview_window("main") {
             let _ = window.eval(&format!(r#"
                 (function() {{
                     var overlay = document.createElement('div');
                     overlay.id = '__update_overlay';
                     overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:99999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px)';
-                    overlay.innerHTML = `
-                    <div style="background:#1a1a2e;border-radius:16px;padding:40px;min-width:420px;max-width:500px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.1)">
-                        <div id="__update_prompt">
-                            <div style="font-size:40px;margin-bottom:16px">🔄</div>
-                            <div style="color:#fff;font-size:20px;font-weight:700;margin-bottom:8px">Mise à jour disponible</div>
-                            <div style="color:rgba(255,255,255,0.7);font-size:15px;margin-bottom:6px">Version <strong>v{version}</strong></div>
-                            <div style="color:rgba(255,255,255,0.4);font-size:12px;margin-bottom:24px">{body}</div>
-                            <div style="display:flex;gap:12px;justify-content:center">
-                                <button onclick="window.__TAURI__.core.invoke('dismiss_update')" style="padding:10px 24px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:transparent;color:rgba(255,255,255,0.6);cursor:pointer;font-size:14px">Plus tard</button>
-                                <button onclick="window.__TAURI__.core.invoke('accept_update')" style="padding:10px 24px;border-radius:8px;border:none;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;cursor:pointer;font-size:14px;font-weight:600">Mettre à jour</button>
-                            </div>
-                        </div>
-                        <div id="__update_progress" style="display:none">
-                            <div style="font-size:40px;margin-bottom:16px">⬇️</div>
-                            <div style="color:#fff;font-size:18px;font-weight:600;margin-bottom:8px">Mise à jour <span id="__update_version2">v{version}</span></div>
-                            <div id="__update_status" style="color:rgba(255,255,255,0.6);font-size:13px;margin-bottom:20px">Téléchargement en cours...</div>
-                            <div style="background:rgba(255,255,255,0.1);border-radius:8px;height:8px;overflow:hidden;margin-bottom:12px">
-                                <div id="__update_bar" style="height:100%;width:0%;background:linear-gradient(90deg,#4f46e5,#7c3aed);border-radius:8px;transition:width 0.3s ease"></div>
-                            </div>
-                            <div id="__update_pct" style="color:rgba(255,255,255,0.5);font-size:12px">0%</div>
-                        </div>
-                    </div>`;
+                    overlay.innerHTML = '<div style="background:#1a1a2e;border-radius:16px;padding:40px;min-width:400px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.1)">' +
+                        '<div style="font-size:40px;margin-bottom:16px">\u2B07\uFE0F</div>' +
+                        '<div style="color:#fff;font-size:18px;font-weight:600;margin-bottom:8px">Mise \u00e0 jour v{}</div>' +
+                        '<div id="__update_status" style="color:rgba(255,255,255,0.6);font-size:13px;margin-bottom:20px">T\u00e9l\u00e9chargement en cours...</div>' +
+                        '<div style="background:rgba(255,255,255,0.1);border-radius:8px;height:8px;overflow:hidden;margin-bottom:12px">' +
+                        '  <div id="__update_bar" style="height:100%;width:0%;background:linear-gradient(90deg,#4f46e5,#7c3aed);border-radius:8px;transition:width 0.3s ease"></div>' +
+                        '</div>' +
+                        '<div id="__update_pct" style="color:rgba(255,255,255,0.5);font-size:12px">0%</div>' +
+                    '</div>';
                     document.body.appendChild(overlay);
                 }})();
-            "#, version = version, body = body.replace('`', "\\`").replace('\\', "\\\\")));
+            "#, version));
         }
-    } else {
-        log::info!("No update available - app is up to date.");
+
+        // Backup before update
+        log::info!("Creating pre-update backup...");
+        let backup_client = reqwest::Client::new();
+        match backup_client.post("http://localhost:8010/api/settings/backup/pre-update").send().await {
+            Ok(resp) => log::info!("Pre-update backup: {}", resp.status()),
+            Err(e) => log::warn!("Pre-update backup failed: {}", e),
+        }
+
+        // Download and install with progress
+        let handle_dl = handle.clone();
+        let mut downloaded: usize = 0;
+        update.download_and_install(
+            move |chunk_length, content_length| {
+                downloaded += chunk_length;
+                if let Some(total) = content_length {
+                    let pct = ((downloaded as f64 / total as f64) * 100.0).min(100.0) as u32;
+                    let mb_down = downloaded as f64 / 1_048_576.0;
+                    let mb_total = total as f64 / 1_048_576.0;
+                    if let Some(window) = handle_dl.get_webview_window("main") {
+                        let _ = window.eval(&format!(
+                            "document.getElementById('__update_bar').style.width='{}%';\
+                             document.getElementById('__update_pct').textContent='{:.1} Mo / {:.1} Mo ({}%)';"
+                            , pct, mb_down, mb_total, pct));
+                    }
+                }
+            },
+            || {
+                log::info!("Download finished, installing...");
+            },
+        ).await?;
+
+        // Show completion
         if let Some(window) = handle.get_webview_window("main") {
-            let _ = window.eval("console.log('[Updater] No update available - app is up to date.')");
+            let _ = window.eval(
+                "document.getElementById('__update_status').textContent='Installation termin\u00e9e !';\
+                 document.getElementById('__update_bar').style.width='100%';\
+                 document.getElementById('__update_pct').textContent='Red\u00e9marrage dans 3 secondes...';"
+            );
+        }
+
+        // Kill backend
+        kill_backend(&handle);
+
+        let delay = std::time::Duration::from_secs(3);
+        tauri::async_runtime::spawn_blocking(move || std::thread::sleep(delay)).await.ok();
+
+        log::info!("Restarting app...");
+        handle.restart();
+    } else {
+        log::info!("No update available.");
+        if let Some(window) = handle.get_webview_window("main") {
+            let _ = window.eval("console.log('[Updater] App is up to date.')");
         }
     }
     Ok(())
