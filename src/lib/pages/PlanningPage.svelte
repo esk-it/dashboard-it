@@ -667,6 +667,10 @@
      ========================================================================= */
   .planning-page {
     animation: fadeIn 0.35s ease-out;
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 56px);
+    overflow: hidden;
   }
 
   /* =========================================================================
@@ -678,7 +682,8 @@
     justify-content: space-between;
     flex-wrap: wrap;
     gap: 12px;
-    margin-bottom: 20px;
+    margin-bottom: 12px;
+    flex-shrink: 0;
   }
 
   .nav-controls {
@@ -819,6 +824,10 @@
     -webkit-backdrop-filter: blur(16px);
     overflow: hidden;
     box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
   }
 
   /* =========================================================================
@@ -827,6 +836,9 @@
   .month-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
+    grid-template-rows: auto repeat(6, 1fr);
+    flex: 1;
+    min-height: 0;
   }
 
   .day-header {
@@ -845,8 +857,9 @@
   }
 
   .day-cell {
-    min-height: 110px;
+    min-height: 0;
     padding: 6px 7px;
+    overflow: hidden;
     border-right: 1px solid var(--border-subtle);
     border-bottom: 1px solid var(--border-subtle);
     cursor: pointer;
@@ -964,6 +977,8 @@
   .week-view {
     display: flex;
     flex-direction: column;
+    flex: 1;
+    min-height: 0;
   }
 
   .week-header {
@@ -1042,7 +1057,8 @@
   /* Time grid */
   .time-grid-scroll {
     overflow-y: auto;
-    max-height: calc(100vh - 280px);
+    flex: 1;
+    min-height: 0;
   }
   .time-grid {
     position: relative;
