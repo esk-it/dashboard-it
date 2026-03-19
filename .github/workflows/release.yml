@@ -95,10 +95,18 @@ jobs:
           fi
 
           # Force recreate with standard Deflate via 7-Zip (available on GitHub runners)
-          NSIS_ZIP_NEW="${NSIS_EXE%.exe}.nsis.zip"
+          # IMPORTANT: cd into the dir so the exe is stored at zip root (no subdirectory paths)
+          NSIS_DIR=$(dirname "$NSIS_EXE")
+          NSIS_EXE_NAME=$(basename "$NSIS_EXE")
+          NSIS_ZIP_NAME="${NSIS_EXE_NAME%.exe}.nsis.zip"
+          NSIS_ZIP_NEW="$NSIS_DIR/$NSIS_ZIP_NAME"
           rm -f "$NSIS_ZIP_NEW"
-          echo "Creating zip with standard Deflate compression..."
-          7z a -tzip -mm=Deflate "$NSIS_ZIP_NEW" "$NSIS_EXE"
+          echo "Creating zip with standard Deflate compression (store at root)..."
+          pushd "$NSIS_DIR"
+          7z a -tzip -mm=Deflate -mx=5 "$NSIS_ZIP_NAME" "$NSIS_EXE_NAME"
+          echo "Zip contents:"
+          7z l "$NSIS_ZIP_NAME"
+          popd
           NSIS_ZIP="$NSIS_ZIP_NEW"
           echo "Zip created: $(ls -la "$NSIS_ZIP")"
 
