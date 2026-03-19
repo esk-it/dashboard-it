@@ -179,6 +179,193 @@
   background: var(--scrollbar-thumb-hover);
 }
 
+/* ═══════════════════════════════════════════════
+   GLASS LIGHT: AGGRESSIVE OVERRIDES FOR ALL
+   HARDCODED WHITE TEXT IN SVELTE COMPONENTS
+   ═══════════════════════════════════════════════ */
+
+/* Force ALL text in light theme to dark colors — this overrides
+   inline styles and scoped component styles that hardcode #fff */
+[data-theme="glass-light"] *:not(.tab.active):not([class*="btn-"]):not(button) {
+  color: var(--text-primary);
+}
+
+/* Headings — always dark */
+[data-theme="glass-light"] h1,
+[data-theme="glass-light"] h2,
+[data-theme="glass-light"] h3,
+[data-theme="glass-light"] h4,
+[data-theme="glass-light"] h5,
+[data-theme="glass-light"] h6 {
+  color: var(--text-heading) !important;
+}
+
+/* Stat numbers, values, hostnames, titles — all dark */
+[data-theme="glass-light"] .stat-value,
+[data-theme="glass-light"] .stat-label,
+[data-theme="glass-light"] .hostname,
+[data-theme="glass-light"] .title-row h1,
+[data-theme="glass-light"] .title-row span,
+[data-theme="glass-light"] .empty-card h2,
+[data-theme="glass-light"] .empty-card p,
+[data-theme="glass-light"] .audit-card h3,
+[data-theme="glass-light"] .dialog-header h2,
+[data-theme="glass-light"] .search-input,
+[data-theme="glass-light"] .filter-select {
+  color: var(--text-heading) !important;
+}
+
+/* Table cells */
+[data-theme="glass-light"] td,
+[data-theme="glass-light"] th,
+[data-theme="glass-light"] tr {
+  color: var(--text-primary) !important;
+}
+
+/* List items, paragraphs, spans, labels, divs */
+[data-theme="glass-light"] p,
+[data-theme="glass-light"] span:not(.tab.active span),
+[data-theme="glass-light"] label,
+[data-theme="glass-light"] li,
+[data-theme="glass-light"] div:not(.tab.active),
+[data-theme="glass-light"] a:not(.tab.active) {
+  color: var(--text-primary);
+}
+
+/* Small / muted text */
+[data-theme="glass-light"] small,
+[data-theme="glass-light"] .text-muted,
+[data-theme="glass-light"] .muted {
+  color: var(--text-muted) !important;
+}
+
+/* Inputs, selects, textareas */
+[data-theme="glass-light"] input,
+[data-theme="glass-light"] textarea,
+[data-theme="glass-light"] select,
+[data-theme="glass-light"] select option {
+  background: #ffffff !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-subtle) !important;
+}
+
+[data-theme="glass-light"] input::placeholder,
+[data-theme="glass-light"] textarea::placeholder {
+  color: var(--text-muted) !important;
+}
+
+/* Cards — glass effect for light */
+[data-theme="glass-light"] .glass-card,
+[data-theme="glass-light"] [class*="card"] {
+  background: var(--bg-card) !important;
+  border-color: var(--border-subtle) !important;
+}
+
+/* Sidebar */
+[data-theme="glass-light"] aside,
+[data-theme="glass-light"] .sidebar,
+[data-theme="glass-light"] nav {
+  background: var(--bg-sidebar) !important;
+}
+
+/* Dialogs / modals */
+[data-theme="glass-light"] .dialog-overlay,
+[data-theme="glass-light"] .modal-overlay {
+  background: rgba(0, 0, 0, 0.25) !important;
+}
+
+[data-theme="glass-light"] .dialog-content,
+[data-theme="glass-light"] .modal-content,
+[data-theme="glass-light"] .dialog-body,
+[data-theme="glass-light"] .modal-body {
+  background: #fff !important;
+  color: var(--text-primary) !important;
+}
+
+/* Buttons — keep white text on colored backgrounds */
+[data-theme="glass-light"] button,
+[data-theme="glass-light"] .btn,
+[data-theme="glass-light"] [class*="btn-"] {
+  /* Don't override button text — colored buttons need white text */
+}
+
+/* But ghost/outline buttons need dark text */
+[data-theme="glass-light"] button.ghost,
+[data-theme="glass-light"] button.outline,
+[data-theme="glass-light"] .btn-ghost,
+[data-theme="glass-light"] .btn-outline {
+  color: var(--text-primary) !important;
+}
+
+/* Active tabs keep white text (on accent background) */
+[data-theme="glass-light"] .tab.active {
+  color: #fff !important;
+}
+
+/* Inactive tabs need dark text */
+[data-theme="glass-light"] .tab:not(.active) {
+  color: var(--text-secondary) !important;
+}
+
+/* Filter selects */
+[data-theme="glass-light"] .filter-select,
+[data-theme="glass-light"] .filter-select option {
+  background: #fff !important;
+  color: var(--text-primary) !important;
+}
+
+/* Tooltips */
+[data-theme="glass-light"] [class*="tooltip"] {
+  background: #1e293b !important;
+  color: #fff !important;
+}
+
+/* Badge text — keep readable */
+[data-theme="glass-light"] .badge,
+[data-theme="glass-light"] [class*="badge"] {
+  color: var(--text-primary) !important;
+  background: var(--bg-badge) !important;
+}
+
+/* Status badges with colors keep white text */
+[data-theme="glass-light"] .badge[style*="background"],
+[data-theme="glass-light"] [class*="status-"] {
+  color: #fff !important;
+}
+
+/* Tree items */
+[data-theme="glass-light"] .tree-item {
+  color: var(--text-primary) !important;
+}
+
+[data-theme="glass-light"] .tree-item.selected {
+  color: #fff !important;
+}
+
+/* Hover states */
+[data-theme="glass-light"] [class*="hover"]:hover,
+[data-theme="glass-light"] tr:hover {
+  background: rgba(0, 0, 0, 0.04) !important;
+}
+
+/* Fix backgrounds that use rgba(255,255,255,...) for subtle effects */
+[data-theme="glass-light"] .content,
+[data-theme="glass-light"] main {
+  background: transparent !important;
+}
+
+/* Body & html in light mode */
+[data-theme="glass-light"],
+[data-theme="glass-light"] body {
+  background: #E8ECF2 !important;
+}
+
+/* Splash screen — keep dark in light mode */
+[data-theme="glass-light"] .splash-screen {
+  background: #070B14 !important;
+  color: #e2e8f0 !important;
+}
+
 * {
   margin: 0;
   padding: 0;

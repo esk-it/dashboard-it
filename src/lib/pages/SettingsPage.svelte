@@ -127,7 +127,8 @@
     try {
       const res = await fetch(`${API}/theme`);
       theme = await res.json();
-      if (theme.theme) applyTheme(theme.theme);
+      // Do NOT re-apply theme on load — just read the saved value
+      // The theme is already applied by stores/settings.js at startup
     } catch(e) {}
   }
 
@@ -211,7 +212,7 @@
   function setAccent(color) { theme.accent = color; saveTheme(); }
   function setBrandIcon(icon) { theme.brand_icon = icon; saveTheme(); }
 
-  function applyTheme(themeName) {
+  function applyTheme(themeName, save = true) {
     const root = document.documentElement;
     if (themeName === 'glass-light') {
       root.setAttribute('data-theme', 'glass-light');
@@ -226,7 +227,7 @@
     const varProps = ['--bg-base','--bg-card','--bg-card-solid','--bg-sidebar','--bg-hover',
       '--border-subtle','--border-hover','--text-primary','--text-secondary','--text-muted'];
     varProps.forEach(p => root.style.removeProperty(p));
-    saveTheme();
+    if (save) saveTheme();
   }
 
   function setModuleIcon(key, icon) {
