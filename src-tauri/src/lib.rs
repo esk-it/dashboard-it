@@ -96,37 +96,71 @@ async fn check_for_updates(handle: tauri::AppHandle) -> Result<(), Box<dyn std::
     let update = updater.check().await?;
 
     if let Some(update) = update {
-        log::info!("Update available: {}", update.version);
+        let version = update.version.clone();
+        log::info!("Update available: {}", version);
 
-        // Show a confirm dialog via JavaScript
+        // Show update overlay with progress bar
         if let Some(window) = handle.get_webview_window("main") {
-            let version = update.version.clone();
-            let _ = window.eval(&format!(
-                "alert('Mise à jour disponible : v{}')",
-                version
-            ));
+            let _ = window.eval(&format!(r#"
+                (function() {{
+                    var overlay = document.createElement('div');
+                    overlay.id = '__update_overlay';
+                    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:99999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px)';
+                    overlay.innerHTML = '<div style="background:#1a1a2e;border-radius:16px;padding:40px;min-width:400px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.1)">' +
+                        '<div style="font-size:40px;margin-bottom:16px">⬇️</div>' +
+                        '<div style="color:#fff;font-size:18px;font-weight:600;margin-bottom:8px">Mise à jour v{}</div>' +
+                        '<div id="__update_status" style="color:rgba(255,255,255,0.6);font-size:13px;margin-bottom:20px">Téléchargement en cours...</div>' +
+                        '<div style="background:rgba(255,255,255,0.1);border-radius:8px;height:8px;overflow:hidden;margin-bottom:12px">' +
+                        '  <div id="__update_bar" style="height:100%;width:0%;background:linear-gradient(90deg,#4f46e5,#7c3aed);border-radius:8px;transition:width 0.3s ease"></div>' +
+                        '</div>' +
+                        '<div id="__update_pct" style="color:rgba(255,255,255,0.5);font-size:12px">0%</div>' +
+                    '</div>';
+                    document.body.appendChild(overlay);
+                }})();
+            "#, version));
         }
 
         // Kill backend before update to release file locks
         kill_backend(&handle);
 
-        // Download and install the update
+        // Download and install the update with progress
+        let handle_dl = handle.clone();
         let mut downloaded: usize = 0;
         update.download_and_install(
-            |chunk_length, content_length| {
+            move |chunk_length, content_length| {
                 downloaded += chunk_length;
-                log::info!("Downloaded {} / {:?}", downloaded, content_length);
+                if let Some(total) = content_length {
+                    let pct = ((downloaded as f64 / total as f64) * 100.0).min(100.0) as u32;
+                    let mb_down = downloaded as f64 / 1_048_576.0;
+                    let mb_total = total as f64 / 1_048_576.0;
+                    if let Some(window) = handle_dl.get_webview_window("main") {
+                        let _ = window.eval(&format!(
+                            "document.getElementById('__update_bar').style.width='{}%';document.getElementById('__update_pct').textContent='{:.1} Mo / {:.1} Mo ({}%)';",
+                            pct, mb_down, mb_total, pct
+                        ));
+                    }
+                }
             },
             || {
                 log::info!("Download finished, installing...");
             },
         ).await?;
 
+        // Show installing state
+        if let Some(window) = handle.get_webview_window("main") {
+            let _ = window.eval(
+                "document.getElementById('__update_status').textContent='Installation en cours...';document.getElementById('__update_bar').style.width='100%';document.getElementById('__update_pct').textContent='Redémarrage imminent...';"
+            );
+        }
+
+        // Small delay so user sees the "installing" message
+        let delay = std::time::Duration::from_secs(2);
+        tauri::async_runtime::spawn_blocking(move || std::thread::sleep(delay)).await.ok();
+
         log::info!("Update installed, restarting...");
         handle.restart();
     } else {
         log::info!("No update available - app is up to date.");
-        // Debug: show in console
         if let Some(window) = handle.get_webview_window("main") {
             let _ = window.eval("console.log('[Updater] No update available - app is up to date.')");
         }

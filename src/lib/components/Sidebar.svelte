@@ -1,7 +1,18 @@
 <script>
+  import { onMount } from 'svelte';
   import { currentPage, navItems } from '../stores/navigation.js';
 
   let hovered = false;
+  let appVersion = '';
+
+  onMount(async () => {
+    try {
+      const { getVersion } = await import('@tauri-apps/api/app');
+      appVersion = await getVersion();
+    } catch {
+      appVersion = '2.4.3';
+    }
+  });
 
   function navigate(path) {
     currentPage.set(path);
@@ -71,7 +82,7 @@
       <!-- Version -->
       <div class="version">
         {#if hovered}
-          <span>v2.4</span>
+          <span>v{appVersion}</span>
         {:else}
           <span class="version-dot"></span>
         {/if}
