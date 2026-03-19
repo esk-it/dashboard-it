@@ -143,7 +143,7 @@ async fn check_for_updates(handle: tauri::AppHandle) -> Result<(), Box<dyn std::
         // Download and install with progress
         let handle_dl = handle.clone();
         let mut downloaded: usize = 0;
-        update.download_and_install(
+        let install_result = update.download_and_install(
             move |chunk_length, content_length| {
                 downloaded += chunk_length;
                 if let Some(total) = content_length {
@@ -159,27 +159,48 @@ async fn check_for_updates(handle: tauri::AppHandle) -> Result<(), Box<dyn std::
                 }
             },
             || {
-                log::info!("Download finished, installing...");
+                log::info!("Download finished, preparing install...");
             },
-        ).await?;
+        ).await;
 
-        // Show completion
-        if let Some(window) = handle.get_webview_window("main") {
-            let _ = window.eval(
-                "document.getElementById('__update_status').textContent='Installation termin\u{00e9}e !';\
-                 document.getElementById('__update_bar').style.width='100%';\
-                 document.getElementById('__update_pct').textContent='Red\u{00e9}marrage dans 3 secondes...';"
-            );
+        match install_result {
+            Ok(_) => {
+                log::info!("Install succeeded, preparing restart...");
+
+                // Show completion
+                if let Some(window) = handle.get_webview_window("main") {
+                    let _ = window.eval(
+                        "document.getElementById('__update_status').textContent='Installation termin\u{00e9}e !';\
+                         document.getElementById('__update_bar').style.width='100%';\
+                         document.getElementById('__update_pct').textContent='Red\u{00e9}marrage dans 3 secondes...';"
+                    );
+                }
+
+                // Kill backend before restart
+                kill_backend(&handle);
+
+                let delay = std::time::Duration::from_secs(3);
+                tauri::async_runtime::spawn_blocking(move || std::thread::sleep(delay)).await.ok();
+
+                log::info!("Restarting app now...");
+                // Try restart, fallback to process::exit to let NSIS installer take over
+                handle.restart();
+                // If restart() didn't kill the process (shouldn't happen), force exit
+                std::process::exit(0);
+            }
+            Err(e) => {
+                log::error!("Update install failed: {}", e);
+                if let Some(window) = handle.get_webview_window("main") {
+                    let _ = window.eval(&format!(
+                        "document.getElementById('__update_status').textContent='Erreur: {}';\
+                         document.getElementById('__update_pct').textContent='Fermez et relancez manuellement.';\
+                         document.getElementById('__update_bar').style.background='#ef4444';",
+                        e.to_string().replace('\'', "\\'").replace('\n', " ")
+                    ));
+                }
+                return Err(Box::new(e));
+            }
         }
-
-        // Kill backend
-        kill_backend(&handle);
-
-        let delay = std::time::Duration::from_secs(3);
-        tauri::async_runtime::spawn_blocking(move || std::thread::sleep(delay)).await.ok();
-
-        log::info!("Restarting app...");
-        handle.restart();
     } else {
         log::info!("No update available.");
         if let Some(window) = handle.get_webview_window("main") {
