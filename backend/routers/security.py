@@ -198,9 +198,9 @@ async def cross_reference(db=Depends(get_raw_db)):
                 ws_online=ws_match.get("online", False),
                 ws_malwareProtection=ws_match.get("malwareProtection", ""),
                 ws_ipAddress=ws_match.get("ipAddress", ""),
+                ws_profileName=ws_match.get("profileName", ""),
             ))
         else:
-            # Fallback: try IP matching (not implemented yet — would need IP in parc)
             unprotected_list.append(UnprotectedDevice(
                 hostname=pc["hostname"],
                 equip_type=pc["equip_type"],

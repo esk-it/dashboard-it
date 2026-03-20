@@ -66,6 +66,7 @@ class ProtectedDevice(BaseModel):
     ws_online: bool = False
     ws_malwareProtection: str = ""
     ws_ipAddress: str = ""
+    ws_profileName: str = ""
 
 
 class UnprotectedDevice(BaseModel):
@@ -75,6 +76,7 @@ class UnprotectedDevice(BaseModel):
     site_name: str = ""
     building_name: str = ""
     serial_number: str = ""
+    ip_address: str = ""
 
 
 class UnknownDevice(BaseModel):

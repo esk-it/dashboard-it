@@ -303,7 +303,7 @@
       </div>
       <div class="stat-card unknown-card">
         <span class="stat-value">{crossRef.stats.unknown}</span>
-        <span class="stat-label">Inconnus WS</span>
+        <span class="stat-label">Hors inventaire</span>
       </div>
       <div class="stat-card coverage-pct">
         <span class="stat-value">{crossRef.stats.coverage_percent}%</span>
@@ -323,7 +323,7 @@
       </button>
       <button class="sub-tab" class:active={crossRefSubTab === 'unknown'}
               on:click={() => crossRefSubTab = 'unknown'}>
-        Inconnus <span class="badge warn">{crossRef.stats.unknown}</span>
+        Hors inventaire <span class="badge warn">{crossRef.stats.unknown}</span>
       </button>
     </div>
 
@@ -345,6 +345,7 @@
               <th>Site</th>
               <th>Bâtiment</th>
               <th>N° Série</th>
+              <th>IP</th>
             </tr>
           </thead>
           <tbody>
@@ -356,10 +357,11 @@
                 <td>{item.site_name || '—'}</td>
                 <td>{item.building_name || '—'}</td>
                 <td>{item.serial_number || '—'}</td>
+                <td class="mono">{item.ip_address || '—'}</td>
               </tr>
             {/each}
             {#if crossRefFiltered.length === 0}
-              <tr><td colspan="6" class="empty-row">Aucun poste non protégé</td></tr>
+              <tr><td colspan="7" class="empty-row">Aucun poste non protégé</td></tr>
             {/if}
           </tbody>
         </table>
@@ -374,6 +376,7 @@
               <th>Site</th>
               <th>Statut WS</th>
               <th>Protection</th>
+              <th>Profil</th>
               <th>IP</th>
             </tr>
           </thead>
@@ -397,11 +400,12 @@
                     </span>
                   {:else}—{/if}
                 </td>
+                <td>{item.ws_profileName || '—'}</td>
                 <td class="mono">{item.ws_ipAddress || '—'}</td>
               </tr>
             {/each}
             {#if crossRefFiltered.length === 0}
-              <tr><td colspan="7" class="empty-row">Aucun poste protégé trouvé</td></tr>
+              <tr><td colspan="8" class="empty-row">Aucun poste protégé trouvé</td></tr>
             {/if}
           </tbody>
         </table>
@@ -431,7 +435,7 @@
               </tr>
             {/each}
             {#if crossRefFiltered.length === 0}
-              <tr><td colspan="5" class="empty-row">Aucun appareil inconnu</td></tr>
+              <tr><td colspan="5" class="empty-row">Aucun appareil hors inventaire</td></tr>
             {/if}
           </tbody>
         </table>
