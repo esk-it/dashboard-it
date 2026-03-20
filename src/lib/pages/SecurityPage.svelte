@@ -31,8 +31,31 @@
     const q = searchQuery.toLowerCase();
     return (d.name || '').toLowerCase().includes(q) ||
            (d.os || '').toLowerCase().includes(q) ||
+           (d.profileName || '').toLowerCase().includes(q) ||
            (d.ipAddress || '').toLowerCase().includes(q);
   });
+
+  // Profiles: extract unique profiles and count devices per profile
+  $: profiles = buildProfiles(devices);
+
+  function buildProfiles(devs) {
+    const map = {};
+    for (const d of devs) {
+      const name = d.profileName || 'Sans profil';
+      if (!map[name]) {
+        map[name] = { name, devices: [], online: 0, offline: 0, alerts: 0 };
+      }
+      map[name].devices.push(d);
+      if (d.online) map[name].online++;
+      else map[name].offline++;
+      if (d.malwareProtection && d.malwareProtection.toLowerCase() !== 'ok' && d.malwareProtection !== '') {
+        map[name].alerts++;
+      }
+    }
+    return Object.values(map).sort((a, b) => b.devices.length - a.devices.length);
+  }
+
+  let selectedProfile = null;
 
   $: crossRefFiltered = crossRef ? filterCrossRef(crossRef, crossRefSubTab, crossRefSearch) : [];
 
@@ -184,6 +207,9 @@
   <button class="tab" class:active={activeTab === 'coverage'} on:click={() => switchTab('coverage')}>
     Couverture
   </button>
+  <button class="tab" class:active={activeTab === 'profiles'} on:click={() => switchTab('profiles')}>
+    Profils
+  </button>
 </div>
 
 <!-- ── Content ────────────────────────────────────────────── -->
@@ -214,6 +240,7 @@
             <th>Hostname</th>
             <th>OS</th>
             <th>Profil</th>
+            <th>Souscription</th>
             <th>Version client</th>
             <th>Malware</th>
             <th>Mises à jour</th>
@@ -231,6 +258,7 @@
               <td class="hostname">{device.name || '—'}</td>
               <td>{device.os || '—'}</td>
               <td>{device.profileName || '—'}</td>
+              <td class="sub-name">{device.subscriptionName || '—'}</td>
               <td>{device.clientVersion || '—'}</td>
               <td>
                 {#if device.malwareProtection}
@@ -247,7 +275,7 @@
             </tr>
           {/each}
           {#if filteredDevices.length === 0}
-            <tr><td colspan="9" class="empty-row">Aucun appareil trouvé</td></tr>
+            <tr><td colspan="10" class="empty-row">Aucun appareil trouvé</td></tr>
           {/if}
         </tbody>
       </table>
@@ -417,6 +445,105 @@
         <p>Synchronisez le module Parc et WithSecure pour voir la couverture de protection.</p>
       </div>
     </div>
+  {/if}
+
+{:else if activeTab === 'profiles'}
+  <!-- ── Profiles Tab ──────────────────────────────────────── -->
+  {#if devices.length === 0}
+    <div class="empty-state">
+      <div class="empty-card">
+        <span class="empty-icon">🛡️</span>
+        <h2>Aucun appareil</h2>
+        <p>Synchronisez WithSecure pour voir les profils de protection.</p>
+      </div>
+    </div>
+  {:else}
+    <div class="profiles-grid">
+      {#each profiles as profile}
+        <button
+          class="profile-card"
+          class:selected={selectedProfile === profile.name}
+          on:click={() => selectedProfile = selectedProfile === profile.name ? null : profile.name}
+        >
+          <div class="profile-header">
+            <span class="profile-icon">🛡️</span>
+            <h3 class="profile-name">{profile.name}</h3>
+          </div>
+          <div class="profile-stats">
+            <div class="profile-stat">
+              <span class="profile-stat-value">{profile.devices.length}</span>
+              <span class="profile-stat-label">Appareils</span>
+            </div>
+            <div class="profile-stat">
+              <span class="profile-stat-value online-text">{profile.online}</span>
+              <span class="profile-stat-label">En ligne</span>
+            </div>
+            <div class="profile-stat">
+              <span class="profile-stat-value offline-text">{profile.offline}</span>
+              <span class="profile-stat-label">Hors ligne</span>
+            </div>
+            {#if profile.alerts > 0}
+              <div class="profile-stat">
+                <span class="profile-stat-value alert-text">{profile.alerts}</span>
+                <span class="profile-stat-label">Alertes</span>
+              </div>
+            {/if}
+          </div>
+        </button>
+      {/each}
+    </div>
+
+    {#if selectedProfile}
+      <h3 class="profile-detail-title">Appareils du profil « {selectedProfile} »</h3>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Statut</th>
+              <th>Hostname</th>
+              <th>OS</th>
+              <th>État profil</th>
+              <th>Souscription</th>
+              <th>Malware</th>
+              <th>Version client</th>
+              <th>IP</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each profiles.find(p => p.name === selectedProfile)?.devices || [] as device}
+              <tr>
+                <td>
+                  <span class="status-dot" class:online={device.online} class:offline={!device.online}></span>
+                </td>
+                <td class="hostname">{device.name || '—'}</td>
+                <td>{device.os || '—'}</td>
+                <td>
+                  {#if device.profileState}
+                    <span class="profile-state-badge"
+                          class:uptodate={device.profileState === 'upToDate'}
+                          class:inprogress={device.profileState.includes('InProgress')}>
+                      {device.profileState === 'upToDate' ? '✅ À jour' : device.profileState === 'assignInProgress' ? '⏳ Attribution' : device.profileState === 'updateInProgress' ? '⏳ Mise à jour' : device.profileState}
+                    </span>
+                  {:else}—{/if}
+                </td>
+                <td>{device.subscriptionName || '—'}</td>
+                <td>
+                  {#if device.malwareProtection}
+                    <span class="protection-badge"
+                          class:ok={device.malwareProtection.toLowerCase() === 'ok'}
+                          class:alert={device.malwareProtection.toLowerCase() !== 'ok'}>
+                      {device.malwareProtection}
+                    </span>
+                  {:else}—{/if}
+                </td>
+                <td>{device.clientVersion || '—'}</td>
+                <td class="mono">{device.ipAddress || '—'}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+    {/if}
   {/if}
 {/if}
 
@@ -662,4 +789,51 @@
     padding: 4px 8px; border-radius: 6px; transition: background 0.15s;
   }
   .btn-refresh:hover { background: rgba(255,255,255,0.08); }
+
+  /* ── Profiles tab ─────────────────────────────────────────── */
+  .profiles-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px; margin-bottom: 20px;
+  }
+  .profile-card {
+    background: var(--bg-card, rgba(255,255,255,0.06));
+    border: 1px solid var(--border-subtle, rgba(255,255,255,0.08));
+    border-radius: 12px; padding: 16px 20px;
+    cursor: pointer; text-align: left; font-family: inherit;
+    transition: all 0.2s; backdrop-filter: blur(12px);
+    display: flex; flex-direction: column; gap: 12px;
+    color: inherit;
+  }
+  .profile-card:hover {
+    border-color: rgba(108,99,255,0.3); background: rgba(108,99,255,0.06);
+  }
+  .profile-card.selected {
+    border-color: var(--accent, #6C63FF); background: rgba(108,99,255,0.1);
+    box-shadow: 0 0 12px rgba(108,99,255,0.15);
+  }
+  .profile-header { display: flex; align-items: center; gap: 10px; }
+  .profile-icon { font-size: 1.4rem; }
+  .profile-name {
+    margin: 0; font-size: 0.95rem; font-weight: 600; color: #fff;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .profile-stats { display: flex; gap: 16px; }
+  .profile-stat { display: flex; flex-direction: column; align-items: center; }
+  .profile-stat-value { font-size: 1.2rem; font-weight: 700; color: #fff; }
+  .profile-stat-label { font-size: 0.7rem; color: rgba(255,255,255,0.4); text-transform: uppercase; }
+  .online-text { color: #22C55E; }
+  .offline-text { color: #EF4444; }
+  .alert-text { color: #F59E0B; }
+
+  .profile-detail-title {
+    font-size: 1rem; font-weight: 600; color: #fff; margin: 0 0 12px;
+  }
+
+  .profile-state-badge {
+    border-radius: 6px; padding: 2px 8px; font-size: 0.75rem; font-weight: 600;
+    background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.6);
+  }
+  .profile-state-badge.uptodate { background: rgba(34,197,94,0.15); color: #22C55E; }
+  .profile-state-badge.inprogress { background: rgba(245,158,11,0.15); color: #F59E0B; }
+  .sub-name { font-size: 0.78rem; max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
 </style>

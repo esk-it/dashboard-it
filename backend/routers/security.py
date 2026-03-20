@@ -90,18 +90,26 @@ def _normalize_device(raw: dict) -> dict:
     if os_version:
         os_str = f"{os_str} {os_version}"
 
+    # Subscription info
+    sub = raw.get("subscription") or {}
+    sub_name = sub.get("name", "") if isinstance(sub, dict) else ""
+    sub_key = sub.get("key", "") if isinstance(sub, dict) else ""
+
     return dict(
         id=raw.get("id", ""),
         name=raw.get("name", ""),
         os=os_str,
         online=raw.get("online", False),
         profileName=raw.get("profileName", ""),
+        profileState=raw.get("profileState", ""),
         clientVersion=raw.get("clientVersion", ""),
         malwareProtection=raw.get("protectionStatusOverview", raw.get("protectionStatus", "")),
         updatesStatus=raw.get("patchOverallState", ""),
         groups=[],
         ipAddress=raw.get("ipAddresses", raw.get("publicIpAddress", "")),
         registeredAt=raw.get("registrationTimestamp", ""),
+        subscriptionName=sub_name,
+        subscriptionKey=sub_key,
     )
 
 

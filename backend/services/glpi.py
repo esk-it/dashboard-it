@@ -281,6 +281,9 @@ async def fetch_all(url: str, app_token: str, user_token: str) -> dict:
     Returns {"computers": [...], "monitors": [...], "printers": [...], "mapped": [...]}
     where mapped contains parc_equipment-ready dicts.
     """
+    # Ensure URL has protocol
+    if not url.startswith("http://") and not url.startswith("https://"):
+        url = "https://" + url
     async with httpx.AsyncClient(timeout=60, verify=False) as client:
         session_token = await _init_session(client, url, app_token, user_token)
 

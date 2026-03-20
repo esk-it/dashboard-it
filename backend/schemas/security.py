@@ -22,12 +22,15 @@ class SecurityDevice(BaseModel):
     os: str = ""
     online: bool = False
     profileName: str = ""
+    profileState: str = ""
     clientVersion: str = ""
     malwareProtection: str = ""
     updatesStatus: str = ""
     groups: list[str] = []
     ipAddress: str = ""
     registeredAt: str = ""
+    subscriptionName: str = ""
+    subscriptionKey: str = ""
 
 
 class SecurityStats(BaseModel):

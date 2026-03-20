@@ -42,8 +42,10 @@ async def get_config():
 async def update_config(body: GlpiConfig):
     if not body.url or not body.app_token or not body.user_token:
         raise HTTPException(400, "url, app_token and user_token are required")
-    # Normalize URL: remove trailing slash
-    url = body.url.rstrip("/")
+    # Normalize URL: ensure protocol, remove trailing slash
+    url = body.url.strip().rstrip("/")
+    if not url.startswith("http://") and not url.startswith("https://"):
+        url = "https://" + url
     save_config(url, body.app_token, body.user_token)
     return {"status": "ok"}
 
