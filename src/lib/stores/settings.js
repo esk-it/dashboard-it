@@ -35,4 +35,9 @@ export async function loadSettings() {
   } catch (e) {
     console.warn('Failed to load theme:', e);
   }
+
+  // Apply compact mode from localStorage
+  if (localStorage.getItem('itm-compact') === '1') {
+    document.documentElement.setAttribute('data-compact', 'true');
+  }
 }

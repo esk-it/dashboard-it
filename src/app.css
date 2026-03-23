@@ -540,3 +540,32 @@ input[type="datetime-local"] {
     transform: translateX(100%);
   }
 }
+
+/* ═══════════════════════════════════════════════
+   COMPACT MODE — reduces table/card padding
+   Toggle via [data-compact="true"] on <html>
+   ═══════════════════════════════════════════════ */
+[data-compact="true"] table td,
+[data-compact="true"] table th {
+  padding: 4px 8px !important;
+  font-size: 0.78rem !important;
+}
+[data-compact="true"] .stat-card {
+  padding: 8px 12px !important;
+}
+[data-compact="true"] .stat-value {
+  font-size: 1.1rem !important;
+}
+[data-compact="true"] .stat-label {
+  font-size: 0.65rem !important;
+}
+[data-compact="true"] .content {
+  padding: 16px 20px !important;
+}
+[data-compact="true"] .filters-bar {
+  margin-bottom: 6px !important;
+}
+[data-compact="true"] .event-chip {
+  padding: 1px 4px !important;
+  font-size: 0.7rem !important;
+}

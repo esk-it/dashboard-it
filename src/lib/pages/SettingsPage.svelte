@@ -544,6 +544,20 @@
           </div>
 
           <div class="setting-section">
+            <h3>Affichage</h3>
+            <label class="toggle-row">
+              <input type="checkbox" checked={document.documentElement.getAttribute('data-compact') === 'true'}
+                on:change={(e) => {
+                  const on = e.target.checked;
+                  document.documentElement.setAttribute('data-compact', on ? 'true' : 'false');
+                  localStorage.setItem('itm-compact', on ? '1' : '0');
+                }} />
+              <span>Mode compact</span>
+              <span class="setting-desc" style="margin:0;margin-left:8px">R{'\u00e9'}duit l'espacement des tableaux et cartes</span>
+            </label>
+          </div>
+
+          <div class="setting-section">
             <h3>Ic{'\u00f4'}ne des modules</h3>
             <p class="setting-desc">Personnalisez les ic{'\u00f4'}nes affich{'\u00e9'}es dans la barre lat{'\u00e9'}rale.</p>
             <div class="icon-editor-grid">
@@ -1979,5 +1993,16 @@
     color: var(--text-dim, #64748B);
     font-size: 0.7rem;
     white-space: nowrap;
+  }
+
+  /* Toggle row */
+  .toggle-row {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 0.85rem; color: var(--text-secondary, rgba(255,255,255,0.7));
+    cursor: pointer;
+  }
+  .toggle-row input[type="checkbox"] {
+    width: 18px; height: 18px; accent-color: var(--accent, #06A6C9);
+    cursor: pointer;
   }
 </style>
