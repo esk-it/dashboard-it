@@ -607,7 +607,7 @@
               <button type="button" class="md-btn" title="Ligne horizontale" on:click={() => mdInsert('\n---\n')}>—</button>
             </div>
           {/if}
-          <textarea class="form-input form-textarea form-content" bind:this={mdTextarea} bind:value={form.content} rows="12" placeholder={form.content_format === 'markdown' ? '{'\u00C9'}crivez en Markdown...' : '{'\u00C9'}crivez le contenu HTML...'}></textarea>
+          <textarea class="form-input form-textarea form-content" bind:this={mdTextarea} bind:value={form.content} rows="12" placeholder={form.content_format === 'markdown' ? '\u00C9crivez en Markdown...' : '\u00C9crivez le contenu HTML...'}></textarea>
         </label>
 
         <label class="form-label checkbox-field">
