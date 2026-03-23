@@ -129,19 +129,7 @@ jobs:
           echo "${NSIS_ZIP_SIG:0:60}..."
 
           # ── Extract release notes from commit message ──
-          # The commit message first line is the title (e.g. "v2.5.0 — Planning full height")
-          # Lines after the first blank line are the details
-          COMMIT_MSG=$(git log -1 --pretty=format:"%B" 2>/dev/null || echo "Nouvelle version du Dashboard IT.")
-          # Take the first line as title, remaining non-empty lines (excluding Co-Authored-By) as notes
-          NOTES_TITLE=$(echo "$COMMIT_MSG" | head -1 | sed 's/^v[0-9.]* . //')
-          NOTES_BODY=$(echo "$COMMIT_MSG" | tail -n +3 | grep -v "^Co-Authored-By" | grep -v "^$" | sed 's/^- /• /' | head -10)
-          if [ -n "$NOTES_BODY" ]; then
-            RELEASE_NOTES="${NOTES_TITLE}\n${NOTES_BODY}"
-          else
-            RELEASE_NOTES="$NOTES_TITLE"
-          fi
-          # Escape for JSON (newlines -> \n, quotes -> \")
-          RELEASE_NOTES_JSON=$(echo "$RELEASE_NOTES" | sed ':a;N;$!ba;s/\n/\\n/g' | sed 's/"/\\"/g')
+          RELEASE_NOTES_JSON=$(git log -1 --pretty=format:"%s" 2>/dev/null | sed 's/"/\\"/g' | sed 's/^v[0-9.]* [-—] //' || echo "Nouvelle version")
           echo "Release notes: $RELEASE_NOTES_JSON"
 
           # ── Build latest.json ──
@@ -161,7 +149,7 @@ jobs:
           gh release create "$TAG" \
             --repo "$GITHUB_REPOSITORY" \
             --title "ITManager Dashboard $TAG" \
-            --notes "$(echo -e "$RELEASE_NOTES")" \
+            --notes "$RELEASE_NOTES_JSON" \
             --latest
 
           sleep 3
