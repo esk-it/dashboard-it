@@ -83,6 +83,34 @@
   let showDialog = false;
   let editingArticle = null;
   let form = defaultForm();
+  let mdTextarea;
+
+  // Markdown toolbar helpers
+  function mdWrap(before, after) {
+    if (!mdTextarea) return;
+    const start = mdTextarea.selectionStart;
+    const end = mdTextarea.selectionEnd;
+    const selected = form.content.substring(start, end) || 'texte';
+    form.content = form.content.substring(0, start) + before + selected + after + form.content.substring(end);
+    setTimeout(() => {
+      mdTextarea.focus();
+      mdTextarea.selectionStart = start + before.length;
+      mdTextarea.selectionEnd = start + before.length + selected.length;
+    }, 0);
+  }
+  function mdPrefix(prefix) {
+    if (!mdTextarea) return;
+    const start = mdTextarea.selectionStart;
+    const lineStart = form.content.lastIndexOf('\n', start - 1) + 1;
+    form.content = form.content.substring(0, lineStart) + prefix + form.content.substring(lineStart);
+    setTimeout(() => { mdTextarea.focus(); mdTextarea.selectionStart = mdTextarea.selectionEnd = start + prefix.length; }, 0);
+  }
+  function mdInsert(text) {
+    if (!mdTextarea) return;
+    const pos = mdTextarea.selectionStart;
+    form.content = form.content.substring(0, pos) + text + form.content.substring(pos);
+    setTimeout(() => { mdTextarea.focus(); mdTextarea.selectionStart = mdTextarea.selectionEnd = pos + text.length; }, 0);
+  }
 
   // Delete confirmation
   let confirmDeleteId = null;
@@ -558,7 +586,28 @@
 
         <label class="form-label">
           Contenu ({form.content_format === 'markdown' ? 'Markdown' : 'HTML'})
-          <textarea class="form-input form-textarea form-content" bind:value={form.content} rows="12" placeholder={form.content_format === 'markdown' ? 'Écrivez en Markdown...' : 'Écrivez le contenu HTML...'}></textarea>
+          {#if form.content_format === 'markdown'}
+            <div class="md-toolbar">
+              <button type="button" class="md-btn" title="Gras" on:click={() => mdWrap('**','**')}><b>B</b></button>
+              <button type="button" class="md-btn" title="Italique" on:click={() => mdWrap('*','*')}><i>I</i></button>
+              <button type="button" class="md-btn" title="Barr{'\u00e9'}" on:click={() => mdWrap('~~','~~')}><s>S</s></button>
+              <span class="md-sep"></span>
+              <button type="button" class="md-btn" title="Titre 1" on:click={() => mdPrefix('# ')}>H1</button>
+              <button type="button" class="md-btn" title="Titre 2" on:click={() => mdPrefix('## ')}>H2</button>
+              <button type="button" class="md-btn" title="Titre 3" on:click={() => mdPrefix('### ')}>H3</button>
+              <span class="md-sep"></span>
+              <button type="button" class="md-btn" title="Liste" on:click={() => mdPrefix('- ')}>{'\u2022'}</button>
+              <button type="button" class="md-btn" title="Liste num{'\u00e9'}rot{'\u00e9'}e" on:click={() => mdPrefix('1. ')}>1.</button>
+              <button type="button" class="md-btn" title="Case {'\u00e0'} cocher" on:click={() => mdPrefix('- [ ] ')}>{'\u2610'}</button>
+              <span class="md-sep"></span>
+              <button type="button" class="md-btn" title="Code inline" on:click={() => mdWrap('`','`')}>{'\u{1F4BB}'}</button>
+              <button type="button" class="md-btn" title="Bloc de code" on:click={() => mdWrap('\n```\n','\n```\n')}>{'\u{1F4C4}'}</button>
+              <button type="button" class="md-btn" title="Lien" on:click={() => mdWrap('[','](url)')}>{'\u{1F517}'}</button>
+              <button type="button" class="md-btn" title="Citation" on:click={() => mdPrefix('> ')}>{'\u275D'}</button>
+              <button type="button" class="md-btn" title="Ligne horizontale" on:click={() => mdInsert('\n---\n')}>—</button>
+            </div>
+          {/if}
+          <textarea class="form-input form-textarea form-content" bind:this={mdTextarea} bind:value={form.content} rows="12" placeholder={form.content_format === 'markdown' ? '{'\u00C9'}crivez en Markdown...' : '{'\u00C9'}crivez le contenu HTML...'}></textarea>
         </label>
 
         <label class="form-label checkbox-field">
@@ -1519,5 +1568,26 @@
     display: block;
     content: "";
     margin-top: 2px;
+  }
+
+  /* ── Markdown Toolbar ───────────────────────────────── */
+  .md-toolbar {
+    display: flex; align-items: center; gap: 2px; flex-wrap: wrap;
+    padding: 6px 8px; margin-bottom: 4px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px 8px 0 0;
+    border-bottom: none;
+  }
+  .md-btn {
+    background: none; border: none; color: rgba(255,255,255,0.6);
+    padding: 4px 8px; border-radius: 5px; cursor: pointer;
+    font-size: 0.8rem; font-family: inherit; transition: all 0.15s;
+    min-width: 28px; text-align: center;
+  }
+  .md-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+  .md-sep {
+    width: 1px; height: 18px; background: rgba(255,255,255,0.1);
+    margin: 0 4px;
   }
 </style>

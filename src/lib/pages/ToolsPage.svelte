@@ -14,6 +14,8 @@
     { id: 'ipcalc',    label: 'IP / CIDR',     icon: '\u{1F4CA}', group: 'utils' },
     { id: 'wol',       label: 'Wake-on-LAN',   icon: '\u{1F4E1}', group: 'utils' },
     { id: 'whois',     label: 'WHOIS',         icon: '\u{1F50D}', group: 'utils' },
+    { id: 'portscan',  label: 'Scan ports',    icon: '\u{1F6E1}\uFE0F', group: 'network' },
+    { id: 'qrcode',    label: 'QR Code',       icon: '\u{1F4F1}', group: 'utils' },
   ];
 
   // ── Network tools state ───────────────────────────────────────────────────
@@ -57,6 +59,19 @@
   let whoisResult = '';
   let whoisSuccess = null;
   let whoisRunning = false;
+
+  // ── Port scanner state ───────────────────────────────────────────────────
+  let scanHost = '';
+  let scanPorts = '22,80,443,3389,8080';
+  let scanTimeout = 2;
+  let scanRunning = false;
+  let scanResults = [];
+
+  // ── QR Code state ────────────────────────────────────────────────────────
+  let qrText = '';
+  let qrSize = 256;
+  let qrDataUrl = '';
+  let qrType = 'text';  // text, url, wifi, email
 
   onMount(async () => {
     try {
@@ -259,7 +274,65 @@
     return Object.entries(cats);
   })();
 
-  $: isNetworkTab = ['ping', 'dns', 'tcp', 'traceroute'].includes(activeTab);
+  $: isNetworkTab = ['ping', 'dns', 'tcp', 'traceroute', 'portscan'].includes(activeTab);
+
+  // ── Port Scanner ────────────────────────────────────────────────────────
+  async function runPortScan() {
+    if (!scanHost.trim()) return;
+    scanRunning = true;
+    scanResults = [];
+    const ports = scanPorts.split(',').map(p => parseInt(p.trim())).filter(p => !isNaN(p) && p > 0 && p < 65536);
+    const results = [];
+    for (const p of ports) {
+      try {
+        const res = await fetch(`${API}/tcp`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ host: scanHost.trim(), port: p, timeout: scanTimeout }),
+        });
+        const data = await res.json();
+        results.push({ port: p, open: data.open, service: data.service || '', latency: data.latency_ms || '' });
+      } catch {
+        results.push({ port: p, open: false, service: '', latency: '' });
+      }
+      scanResults = [...results]; // Update reactively after each port
+    }
+    scanRunning = false;
+  }
+
+  // ── QR Code Generator (client-side using canvas) ─────────────────────────
+  function generateQrText() {
+    if (qrType === 'wifi') {
+      return `WIFI:T:WPA;S:${qrText};P:${qrText};;`;
+    }
+    if (qrType === 'email') {
+      return `mailto:${qrText}`;
+    }
+    if (qrType === 'url' && qrText && !qrText.startsWith('http')) {
+      return `https://${qrText}`;
+    }
+    return qrText;
+  }
+
+  async function generateQr() {
+    if (!qrText.trim()) return;
+    const text = generateQrText();
+    // Use public API for QR generation (no dependency needed)
+    qrDataUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${qrSize}x${qrSize}&data=${encodeURIComponent(text)}&format=png&margin=8`;
+  }
+
+  function downloadQr() {
+    if (!qrDataUrl) return;
+    const a = document.createElement('a');
+    a.href = qrDataUrl;
+    a.download = `qrcode-${Date.now()}.png`;
+    a.click();
+  }
+
+  function copyQrToClipboard() {
+    if (!qrDataUrl) return;
+    navigator.clipboard.writeText(qrDataUrl);
+  }
 </script>
 
 <div class="tools-page">
@@ -633,6 +706,101 @@
             {:else}
               <div class="output-empty">
                 Entrez un nom de domaine ou une adresse IP pour effectuer une recherche WHOIS.
+              </div>
+            {/if}
+          </div>
+        </div>
+
+      <!-- ═══════════════ PORT SCANNER ═══════════════ -->
+      {:else if activeTab === 'portscan'}
+        <div class="tool-panel">
+          <div class="input-area">
+            <div class="input-row">
+              <input type="text" bind:value={scanHost} placeholder="Adresse IP ou hostname"
+                class="host-input" style="flex:1" on:keydown={(e) => e.key === 'Enter' && runPortScan()} />
+              <input type="text" bind:value={scanPorts} placeholder="Ports (ex: 22,80,443)"
+                class="host-input" style="flex:1.5" />
+              <button class="btn-run" on:click={runPortScan} disabled={scanRunning || !scanHost.trim()}>
+                {#if scanRunning}
+                  {'\u23F3'} Scan...
+                {:else}
+                  {'\u{1F6E1}\uFE0F'} Scanner
+                {/if}
+              </button>
+            </div>
+            <div class="port-presets">
+              <span class="preset-label">Presets :</span>
+              <button class="btn-preset" on:click={() => scanPorts = '22,80,443,3389'}>Web+SSH</button>
+              <button class="btn-preset" on:click={() => scanPorts = '21,22,23,25,53,80,110,143,443,993,995,3306,3389,5432,8080,8443'}>Complet</button>
+              <button class="btn-preset" on:click={() => scanPorts = '135,137,139,445,3389'}>Windows</button>
+              <button class="btn-preset" on:click={() => scanPorts = '22,80,443,8080,8443,9090'}>Linux</button>
+            </div>
+          </div>
+
+          <div class="output-area-inner">
+            {#if scanResults.length > 0}
+              <div class="scan-results-grid">
+                {#each scanResults as r}
+                  <div class="scan-port-card" class:port-open={r.open} class:port-closed={!r.open}>
+                    <span class="port-number">{r.port}</span>
+                    <span class="port-status">{r.open ? '\u2705 Ouvert' : '\u274C Ferm\u00e9'}</span>
+                    {#if r.service}<span class="port-service">{r.service}</span>{/if}
+                  </div>
+                {/each}
+              </div>
+              {#if scanRunning}
+                <div class="scan-progress">{'\u23F3'} Scan en cours... {scanResults.length}/{scanPorts.split(',').length} ports</div>
+              {/if}
+            {:else if scanRunning}
+              <div class="output-loading">{'\u23F3'} D{'\u00e9'}marrage du scan...</div>
+            {:else}
+              <div class="output-empty">
+                Entrez une adresse et des ports pour lancer un scan TCP.
+              </div>
+            {/if}
+          </div>
+        </div>
+
+      <!-- ═══════════════ QR CODE ═══════════════ -->
+      {:else if activeTab === 'qrcode'}
+        <div class="tool-panel">
+          <div class="input-area">
+            <div class="qr-type-row">
+              <button class="qr-type-btn" class:active={qrType === 'text'} on:click={() => qrType = 'text'}>{'\u{1F4DD}'} Texte</button>
+              <button class="qr-type-btn" class:active={qrType === 'url'} on:click={() => qrType = 'url'}>{'\u{1F310}'} URL</button>
+              <button class="qr-type-btn" class:active={qrType === 'wifi'} on:click={() => qrType = 'wifi'}>{'\u{1F4F6}'} Wi-Fi</button>
+              <button class="qr-type-btn" class:active={qrType === 'email'} on:click={() => qrType = 'email'}>{'\u2709\uFE0F'} Email</button>
+            </div>
+            <div class="input-row">
+              <input type="text" bind:value={qrText}
+                placeholder={qrType === 'url' ? 'https://example.com' : qrType === 'wifi' ? 'Nom du r\u00e9seau Wi-Fi' : qrType === 'email' ? 'contact@example.com' : 'Texte \u00e0 encoder'}
+                class="host-input" style="flex:1" on:keydown={(e) => e.key === 'Enter' && generateQr()} />
+              <select bind:value={qrSize} class="host-input" style="width:100px">
+                <option value={128}>128px</option>
+                <option value={256}>256px</option>
+                <option value={512}>512px</option>
+              </select>
+              <button class="btn-run" on:click={generateQr} disabled={!qrText.trim()}>
+                {'\u{1F4F1}'} G{'\u00e9'}n{'\u00e9'}rer
+              </button>
+            </div>
+          </div>
+
+          <div class="output-area-inner">
+            {#if qrDataUrl}
+              <div class="qr-result">
+                <div class="qr-preview">
+                  <img src={qrDataUrl} alt="QR Code" width={qrSize} height={qrSize} />
+                </div>
+                <div class="qr-actions">
+                  <button class="btn-small" on:click={downloadQr}>{'\u{2B07}\uFE0F'} T{'\u00e9'}l{'\u00e9'}charger PNG</button>
+                  <button class="btn-small" on:click={copyQrToClipboard}>{'\u{1F4CB}'} Copier l'URL</button>
+                </div>
+              </div>
+            {:else}
+              <div class="output-empty">
+                <div style="font-size:3rem;margin-bottom:12px">{'\u{1F4F1}'}</div>
+                G{'\u00e9'}n{'\u00e9'}rez un QR Code pour du texte, une URL, un r{'\u00e9'}seau Wi-Fi ou un email.
               </div>
             {/if}
           </div>
@@ -1280,4 +1448,60 @@
     color: var(--text-dim, #64748B);
     width: 100%;
   }
+
+  /* ── Port Scanner ─────────────────────────────────────── */
+  .port-presets {
+    display: flex; align-items: center; gap: 6px; margin-top: 8px; flex-wrap: wrap;
+  }
+  .preset-label { font-size: 0.75rem; color: rgba(255,255,255,0.4); }
+  .btn-preset {
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px; padding: 3px 10px; font-size: 0.72rem; color: rgba(255,255,255,0.6);
+    cursor: pointer; font-family: inherit; transition: all 0.15s;
+  }
+  .btn-preset:hover { background: rgba(108,99,255,0.15); border-color: rgba(108,99,255,0.3); color: #fff; }
+  .scan-results-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px;
+    padding: 16px;
+  }
+  .scan-port-card {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 12px 8px; border-radius: 10px; text-align: center;
+    border: 1px solid rgba(255,255,255,0.06);
+    background: rgba(255,255,255,0.03); transition: all 0.15s;
+  }
+  .scan-port-card.port-open {
+    border-color: rgba(34,197,94,0.3); background: rgba(34,197,94,0.08);
+  }
+  .scan-port-card.port-closed {
+    border-color: rgba(239,68,68,0.2); background: rgba(239,68,68,0.04);
+  }
+  .port-number { font-size: 1.1rem; font-weight: 700; color: #fff; font-family: 'Consolas', monospace; }
+  .port-status { font-size: 0.72rem; }
+  .port-service { font-size: 0.68rem; color: rgba(255,255,255,0.4); }
+  .scan-progress { text-align: center; padding: 12px; font-size: 0.82rem; color: rgba(255,255,255,0.5); }
+
+  /* ── QR Code ──────────────────────────────────────────── */
+  .qr-type-row {
+    display: flex; gap: 6px; margin-bottom: 8px;
+  }
+  .qr-type-btn {
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px; padding: 7px 14px; font-size: 0.8rem; color: rgba(255,255,255,0.6);
+    cursor: pointer; font-family: inherit; transition: all 0.15s;
+  }
+  .qr-type-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+  .qr-type-btn.active {
+    background: rgba(108,99,255,0.15); border-color: var(--accent, #6C63FF);
+    color: #fff; font-weight: 600;
+  }
+  .qr-result {
+    display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 32px;
+  }
+  .qr-preview {
+    background: #fff; border-radius: 12px; padding: 16px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+  }
+  .qr-preview img { display: block; border-radius: 4px; }
+  .qr-actions { display: flex; gap: 8px; }
 </style>
