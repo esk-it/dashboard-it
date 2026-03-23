@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
+import os
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -182,46 +185,130 @@ async def parc_stats(db=Depends(get_raw_db)):
     return ParcStats(total=total, by_type=by_type, by_site=by_site, by_source=by_source)
 
 
-# ── Audit views ─────────────────────────────────────────────
+# ── Audit — Smart rules-based audit ─────────────────────────
 
-@router.get("/audit/no-site", response_model=list[EquipmentResponse])
-async def audit_no_site(db=Depends(get_raw_db)):
+DEFAULT_AUDIT_RULES = {
+    "PC":          {"site": True, "building": True, "room": True, "os": True, "user": False},
+    "Portable":    {"site": True, "building": True, "room": True, "os": True, "user": False},
+    "Chromebook":  {"site": True, "building": False, "room_or_user": True, "os": False, "user": False},
+    "Imprimante":  {"site": True, "building": True, "room": False, "os": False, "user": False},
+    "Switch":      {"site": True, "building": True, "room": False, "os": False, "user": False},
+    "AP Wi-Fi":    {"site": True, "building": True, "room": False, "os": False, "user": False},
+    "Serveur":     {"site": True, "building": True, "room": True, "os": True, "user": False},
+    "_default":    {"site": True, "building": False, "room": False, "os": False, "user": False},
+}
+
+if os.environ.get("ITMANAGER_DATA_DIR"):
+    _AUDIT_RULES_PATH = Path(os.environ["ITMANAGER_DATA_DIR"]) / "data" / "audit_rules.json"
+else:
+    _AUDIT_RULES_PATH = Path(__file__).parent.parent / "data" / "audit_rules.json"
+
+
+def _load_audit_rules() -> dict:
+    if _AUDIT_RULES_PATH.exists():
+        try:
+            return json.loads(_AUDIT_RULES_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return DEFAULT_AUDIT_RULES
+
+
+def _save_audit_rules(rules: dict):
+    _AUDIT_RULES_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _AUDIT_RULES_PATH.write_text(json.dumps(rules, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _check_equipment(eq: dict, rules: dict) -> list[str]:
+    """Return list of missing required fields for an equipment based on its type rules."""
+    equip_type = eq.get("equip_type", "")
+    rule = rules.get(equip_type, rules.get("_default", {}))
+    missing = []
+
+    if rule.get("site") and not eq.get("site_id"):
+        missing.append("site")
+    if rule.get("building") and not eq.get("building_id"):
+        missing.append("building")
+    if rule.get("room") and not eq.get("room_id"):
+        missing.append("room")
+    if rule.get("os") and not eq.get("os", "").strip():
+        missing.append("os")
+    if rule.get("user") and not eq.get("last_user", "").strip():
+        missing.append("user")
+
+    # Special: room_or_user — need at least one of room or user
+    if rule.get("room_or_user"):
+        has_room = bool(eq.get("room_id"))
+        has_user = bool(eq.get("last_user", "").strip())
+        if not has_room and not has_user:
+            missing.append("room_or_user")
+
+    return missing
+
+
+@router.get("/audit")
+async def audit_smart(db=Depends(get_raw_db)):
+    """Smart audit: check each equipment against type-specific rules."""
+    rules = _load_audit_rules()
     rows = await db.execute_fetchall(
-        f"SELECT {_EQ_COLS} {_EQ_FROM} WHERE e.site_id IS NULL ORDER BY e.hostname"
+        f"SELECT {_EQ_COLS} {_EQ_FROM} ORDER BY e.hostname"
     )
-    return [EquipmentResponse(**_row_to_equipment(r)) for r in rows]
+
+    issues = []
+    by_type: dict[str, dict] = {}
+    total_checked = len(rows)
+
+    for r in rows:
+        eq = _row_to_equipment(r)
+        etype = eq["equip_type"] or "_default"
+
+        if etype not in by_type:
+            by_type[etype] = {"total": 0, "issues": 0}
+        by_type[etype]["total"] += 1
+
+        missing = _check_equipment(eq, rules)
+        if missing:
+            severity = "critical" if len(missing) >= 2 else "warning"
+            by_type[etype]["issues"] += 1
+            issues.append({
+                "id": eq["id"],
+                "hostname": eq["hostname"],
+                "equip_type": etype,
+                "site_name": eq.get("site_name", ""),
+                "building_name": eq.get("building_name", ""),
+                "room_name": eq.get("room_name", ""),
+                "last_user": eq.get("last_user", ""),
+                "missing": missing,
+                "severity": severity,
+            })
+
+    n_critical = sum(1 for i in issues if i["severity"] == "critical")
+    n_warning = len(issues) - n_critical
+    compliant = total_checked - len(issues)
+    pct = round(compliant / total_checked * 100, 1) if total_checked > 0 else 100.0
+
+    return {
+        "rules": rules,
+        "issues": issues,
+        "summary": {
+            "total_checked": total_checked,
+            "compliant": compliant,
+            "warnings": n_warning,
+            "critical": n_critical,
+            "compliance_percent": pct,
+            "by_type": by_type,
+        },
+    }
 
 
-@router.get("/audit/no-building", response_model=list[EquipmentResponse])
-async def audit_no_building(db=Depends(get_raw_db)):
-    rows = await db.execute_fetchall(
-        f"SELECT {_EQ_COLS} {_EQ_FROM} WHERE e.building_id IS NULL ORDER BY e.hostname"
-    )
-    return [EquipmentResponse(**_row_to_equipment(r)) for r in rows]
+@router.get("/audit/rules")
+async def get_audit_rules():
+    return _load_audit_rules()
 
 
-@router.get("/audit/no-room", response_model=list[EquipmentResponse])
-async def audit_no_room(db=Depends(get_raw_db)):
-    rows = await db.execute_fetchall(
-        f"SELECT {_EQ_COLS} {_EQ_FROM} WHERE e.room_id IS NULL ORDER BY e.hostname"
-    )
-    return [EquipmentResponse(**_row_to_equipment(r)) for r in rows]
-
-
-@router.get("/audit/no-os", response_model=list[EquipmentResponse])
-async def audit_no_os(db=Depends(get_raw_db)):
-    rows = await db.execute_fetchall(
-        f"SELECT {_EQ_COLS} {_EQ_FROM} WHERE (e.os IS NULL OR e.os = '') ORDER BY e.hostname"
-    )
-    return [EquipmentResponse(**_row_to_equipment(r)) for r in rows]
-
-
-@router.get("/audit/no-user", response_model=list[EquipmentResponse])
-async def audit_no_user(db=Depends(get_raw_db)):
-    rows = await db.execute_fetchall(
-        f"SELECT {_EQ_COLS} {_EQ_FROM} WHERE (e.last_user IS NULL OR e.last_user = '') ORDER BY e.hostname"
-    )
-    return [EquipmentResponse(**_row_to_equipment(r)) for r in rows]
+@router.put("/audit/rules")
+async def set_audit_rules(rules: dict):
+    _save_audit_rules(rules)
+    return {"status": "ok"}
 
 
 # ── Sites CRUD ──────────────────────────────────────────────

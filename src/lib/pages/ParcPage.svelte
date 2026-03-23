@@ -26,13 +26,14 @@
   // Tab: 'inventory' or 'audit'
   let activeTab = 'inventory';
 
-  // Audit data
-  let auditNoSite = [];
-  let auditNoBuilding = [];
-  let auditNoRoom = [];
-  let auditNoOs = [];
-  let auditNoUser = [];
+  // Audit data (smart)
+  let auditData = null;  // { rules, issues, summary }
   let auditLoaded = false;
+  let showRulesPanel = false;
+  let auditRules = {};
+  let savingRules = false;
+  let auditFilterType = '';
+  let auditFilterSeverity = '';
 
   // Equipment dialog
   let showDialog = false;
@@ -114,20 +115,19 @@
     loading = false;
   }
 
+  // Audit derived filters
+  $: filteredAuditIssues = (auditData?.issues || []).filter(i => {
+    if (auditFilterType && i.equip_type !== auditFilterType) return false;
+    if (auditFilterSeverity && i.severity !== auditFilterSeverity) return false;
+    return true;
+  });
+
+  $: auditEquipTypes = auditData ? Object.keys(auditData.summary?.by_type || {}).sort() : [];
+
   async function loadAudit() {
     try {
-      const [ns, nb, nr, no, nu] = await Promise.all([
-        api.get('/api/parc/audit/no-site'),
-        api.get('/api/parc/audit/no-building'),
-        api.get('/api/parc/audit/no-room'),
-        api.get('/api/parc/audit/no-os'),
-        api.get('/api/parc/audit/no-user'),
-      ]);
-      auditNoSite = ns;
-      auditNoBuilding = nb;
-      auditNoRoom = nr;
-      auditNoOs = no;
-      auditNoUser = nu;
+      auditData = await api.get('/api/parc/audit');
+      auditRules = auditData.rules || {};
       auditLoaded = true;
     } catch (e) {
       toastError('Erreur chargement audit : ' + e.message);
@@ -137,6 +137,38 @@
   function switchTab(tab) {
     activeTab = tab;
     if (tab === 'audit' && !auditLoaded) loadAudit();
+  }
+
+  async function saveAuditRules() {
+    savingRules = true;
+    try {
+      await api.put('/api/parc/audit/rules', auditRules);
+      // Reload audit with new rules
+      auditLoaded = false;
+      await loadAudit();
+      success('R\u00e8gles d\u2019audit sauvegard\u00e9es');
+    } catch (e) {
+      toastError('Erreur sauvegarde r\u00e8gles');
+    }
+    savingRules = false;
+  }
+
+  function resetAuditRules() {
+    auditRules = {
+      "PC":          {"site": true, "building": true, "room": true, "os": true, "user": false},
+      "Portable":    {"site": true, "building": true, "room": true, "os": true, "user": false},
+      "Chromebook":  {"site": true, "building": false, "room_or_user": true, "os": false, "user": false},
+      "Imprimante":  {"site": true, "building": true, "room": false, "os": false, "user": false},
+      "Switch":      {"site": true, "building": true, "room": false, "os": false, "user": false},
+      "AP Wi-Fi":    {"site": true, "building": true, "room": false, "os": false, "user": false},
+      "Serveur":     {"site": true, "building": true, "room": true, "os": true, "user": false},
+      "_default":    {"site": true, "building": false, "room": false, "os": false, "user": false},
+    };
+  }
+
+  function missingLabel(key) {
+    const labels = { site: 'Site', building: 'B\u00e2timent', room: 'Salle', os: 'OS', user: 'Utilisateur', room_or_user: 'Salle ou Utilisateur' };
+    return labels[key] || key;
   }
 
   // ── Sidebar ────────────────────────────────────────────────
@@ -312,8 +344,8 @@
   </button>
   <button class="tab" class:active={activeTab === 'audit'} on:click={() => switchTab('audit')}>
     Audit
-    {#if auditLoaded}
-      <span class="badge">{auditNoSite.length + auditNoRoom.length + auditStaleAd.length + auditWarranty.length}</span>
+    {#if auditLoaded && auditData}
+      <span class="badge">{auditData.issues.length}</span>
     {/if}
   </button>
 </div>
@@ -324,51 +356,61 @@
   <!-- Sidebar Tree -->
   <aside class="tree-sidebar">
     <div class="tree-header">
+      <span class="tree-header-icon">{'\u{1F5C2}\uFE0F'}</span>
       <strong>Sites</strong>
       {#if selectedSiteId || selectedBuildingId || selectedRoomId}
         <button class="btn-clear" on:click={clearTreeFilter}>Effacer</button>
       {/if}
     </div>
-    {#each sites as site}
-      <div class="tree-node">
-        <button class="tree-item site-item"
-                class:selected={selectedSiteId === site.id}
-                on:click={() => selectSite(site.id)}>
-          <span class="tree-toggle" on:click|stopPropagation={() => toggleSite(site.id)}>
-            {expandedSites[site.id] ? '▾' : '▸'}
-          </span>
-          <span class="tree-label">{site.code || site.name}</span>
-          <span class="tree-count">{countBySite(site.id)}</span>
-        </button>
-        {#if expandedSites[site.id] && buildings[site.id]}
-          {#each buildings[site.id] as building}
-            <div class="tree-node indent-1">
-              <button class="tree-item"
-                      class:selected={selectedBuildingId === building.id}
-                      on:click={() => selectBuilding(building.id)}>
-                <span class="tree-toggle" on:click|stopPropagation={() => toggleBuilding(building.id)}>
-                  {expandedBuildings[building.id] ? '▾' : '▸'}
-                </span>
-                <span class="tree-label">{building.name}</span>
-                <span class="tree-count">{countByBuilding(building.id)}</span>
-              </button>
-              {#if expandedBuildings[building.id] && rooms[building.id]}
-                {#each rooms[building.id] as room}
-                  <div class="tree-node indent-2">
-                    <button class="tree-item"
-                            class:selected={selectedRoomId === room.id}
-                            on:click={() => selectRoom(room.id)}>
-                      <span class="tree-label">{room.name}</span>
-                      <span class="tree-count">{countByRoom(room.id)}</span>
-                    </button>
-                  </div>
-                {/each}
-              {/if}
+    <div class="tree-list">
+      {#each sites as site}
+        <div class="tree-node">
+          <button class="tree-item site-level"
+                  class:selected={selectedSiteId === site.id}
+                  on:click={() => selectSite(site.id)}>
+            <span class="tree-toggle" on:click|stopPropagation={() => toggleSite(site.id)}>
+              <svg class="chevron" class:open={expandedSites[site.id]} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+            </span>
+            <span class="tree-ico">{'\u{1F3E2}'}</span>
+            <span class="tree-label">{site.code || site.name}</span>
+            <span class="tree-count">{countBySite(site.id)}</span>
+          </button>
+          {#if expandedSites[site.id] && buildings[site.id]}
+            <div class="tree-children">
+              {#each buildings[site.id] as building}
+                <div class="tree-node">
+                  <button class="tree-item building-level"
+                          class:selected={selectedBuildingId === building.id}
+                          on:click={() => selectBuilding(building.id)}>
+                    <span class="tree-toggle" on:click|stopPropagation={() => toggleBuilding(building.id)}>
+                      <svg class="chevron" class:open={expandedBuildings[building.id]} width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                    </span>
+                    <span class="tree-ico">{'\u{1F3D7}\uFE0F'}</span>
+                    <span class="tree-label">{building.name}</span>
+                    <span class="tree-count">{countByBuilding(building.id)}</span>
+                  </button>
+                  {#if expandedBuildings[building.id] && rooms[building.id]}
+                    <div class="tree-children">
+                      {#each rooms[building.id] as room}
+                        <div class="tree-node">
+                          <button class="tree-item room-level"
+                                  class:selected={selectedRoomId === room.id}
+                                  on:click={() => selectRoom(room.id)}>
+                            <span class="tree-ico">{'\u{1F6AA}'}</span>
+                            <span class="tree-label">{room.name}</span>
+                            <span class="tree-count">{countByRoom(room.id)}</span>
+                          </button>
+                        </div>
+                      {/each}
+                    </div>
+                  {/if}
+                </div>
+              {/each}
             </div>
-          {/each}
-        {/if}
-      </div>
-    {/each}
+          {/if}
+        </div>
+      {/each}
+    </div>
   </aside>
 
   <!-- Main Content -->
@@ -443,48 +485,159 @@
 </div>
 
 {:else}
-<!-- ── Audit Tab ──────────────────────────────────────────── -->
+<!-- ── Audit Tab (Smart) ──────────────────────────────────── -->
 <div class="audit-section">
   {#if !auditLoaded}
     <div class="loading">Chargement audit…</div>
-  {:else}
-    <div class="audit-grid">
-      <div class="audit-card" class:warning={auditNoSite.length > 0}>
-        <h3>🏢 Sans site <span class="badge">{auditNoSite.length}</span></h3>
-        {#if auditNoSite.length > 0}
-          <ul>{#each auditNoSite.slice(0, 20) as eq}<li>{eq.hostname}</li>{/each}
-          {#if auditNoSite.length > 20}<li class="muted">… et {auditNoSite.length - 20} autres</li>{/if}</ul>
-        {:else}<p class="ok">Tous assignés</p>{/if}
+  {:else if auditData}
+    <!-- Summary bar -->
+    <div class="audit-summary">
+      <div class="audit-stat-card compliance">
+        <div class="audit-pct">{auditData.summary.compliance_percent}%</div>
+        <div class="audit-pct-bar"><div class="audit-pct-fill" style="width:{auditData.summary.compliance_percent}%"></div></div>
+        <span class="audit-stat-label">Conformit{'\u00e9'}</span>
       </div>
-      <div class="audit-card" class:warning={auditNoBuilding.length > 0}>
-        <h3>🏗️ Sans bâtiment <span class="badge">{auditNoBuilding.length}</span></h3>
-        {#if auditNoBuilding.length > 0}
-          <ul>{#each auditNoBuilding.slice(0, 20) as eq}<li>{eq.hostname} {#if eq.site_name}<span class="muted">({eq.site_name})</span>{/if}</li>{/each}
-          {#if auditNoBuilding.length > 20}<li class="muted">… et {auditNoBuilding.length - 20} autres</li>{/if}</ul>
-        {:else}<p class="ok">Tous assignés</p>{/if}
+      <div class="audit-stat-card">
+        <span class="audit-stat-value">{auditData.summary.total_checked}</span>
+        <span class="audit-stat-label">V{'\u00e9'}rifi{'\u00e9'}s</span>
       </div>
-      <div class="audit-card" class:warning={auditNoRoom.length > 0}>
-        <h3>🚪 Sans salle <span class="badge">{auditNoRoom.length}</span></h3>
-        {#if auditNoRoom.length > 0}
-          <ul>{#each auditNoRoom.slice(0, 20) as eq}<li>{eq.hostname} {#if eq.building_name}<span class="muted">({eq.building_name})</span>{/if}</li>{/each}
-          {#if auditNoRoom.length > 20}<li class="muted">… et {auditNoRoom.length - 20} autres</li>{/if}</ul>
-        {:else}<p class="ok">Tous assignés</p>{/if}
+      <div class="audit-stat-card ok-card">
+        <span class="audit-stat-value">{auditData.summary.compliant}</span>
+        <span class="audit-stat-label">Conformes</span>
       </div>
-      <div class="audit-card" class:warning={auditNoOs.length > 0}>
-        <h3>💻 Sans OS <span class="badge">{auditNoOs.length}</span></h3>
-        {#if auditNoOs.length > 0}
-          <ul>{#each auditNoOs.slice(0, 20) as eq}<li>{eq.hostname} <span class="muted">({eq.equip_type})</span></li>{/each}
-          {#if auditNoOs.length > 20}<li class="muted">… et {auditNoOs.length - 20} autres</li>{/if}</ul>
-        {:else}<p class="ok">Tous renseignés</p>{/if}
+      <div class="audit-stat-card warn-card" class:has-issues={auditData.summary.warnings > 0}>
+        <span class="audit-stat-value">{auditData.summary.warnings}</span>
+        <span class="audit-stat-label">Avertissements</span>
       </div>
-      <div class="audit-card" class:warning={auditNoUser.length > 0}>
-        <h3>👤 Sans utilisateur <span class="badge">{auditNoUser.length}</span></h3>
-        {#if auditNoUser.length > 0}
-          <ul>{#each auditNoUser.slice(0, 20) as eq}<li>{eq.hostname} {#if eq.site_name}<span class="muted">({eq.site_name})</span>{/if}</li>{/each}
-          {#if auditNoUser.length > 20}<li class="muted">… et {auditNoUser.length - 20} autres</li>{/if}</ul>
-        {:else}<p class="ok">Tous renseignés</p>{/if}
+      <div class="audit-stat-card crit-card" class:has-issues={auditData.summary.critical > 0}>
+        <span class="audit-stat-value">{auditData.summary.critical}</span>
+        <span class="audit-stat-label">Critiques</span>
       </div>
+      <button class="btn-rules" on:click={() => showRulesPanel = !showRulesPanel}>
+        {'\u2699\uFE0F'} R{'\u00e8'}gles
+      </button>
     </div>
+
+    <!-- Rules panel (collapsible) -->
+    {#if showRulesPanel}
+      <div class="rules-panel">
+        <h3>{'\u{1F4CB}'} R{'\u00e8'}gles d'audit par type</h3>
+        <p class="rules-help">Cochez les champs obligatoires pour chaque type d'{'\u00e9'}quipement. L'audit v{'\u00e9'}rifiera que ces champs sont renseign{'\u00e9'}s.</p>
+        <div class="rules-table-wrap">
+          <table class="rules-table">
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Site</th>
+                <th>B{'\u00e2'}timent</th>
+                <th>Salle</th>
+                <th>OS</th>
+                <th>Utilisateur</th>
+                <th title="Salle OU Utilisateur (au moins un)">Salle/User</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each Object.keys(auditRules).filter(k => k !== '_default') as type}
+                <tr>
+                  <td class="rule-type">{type}</td>
+                  <td><input type="checkbox" bind:checked={auditRules[type].site} /></td>
+                  <td><input type="checkbox" bind:checked={auditRules[type].building} /></td>
+                  <td><input type="checkbox" bind:checked={auditRules[type].room} /></td>
+                  <td><input type="checkbox" bind:checked={auditRules[type].os} /></td>
+                  <td><input type="checkbox" bind:checked={auditRules[type].user} /></td>
+                  <td><input type="checkbox" bind:checked={auditRules[type].room_or_user} /></td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+        <div class="rules-actions">
+          <button class="btn-secondary" on:click={resetAuditRules}>R{'\u00e9'}initialiser</button>
+          <button class="btn-primary" on:click={saveAuditRules} disabled={savingRules}>
+            {savingRules ? 'Sauvegarde...' : 'Sauvegarder'}
+          </button>
+        </div>
+      </div>
+    {/if}
+
+    <!-- Issues list -->
+    {#if auditData.issues.length === 0}
+      <div class="audit-all-ok">
+        <span class="audit-ok-icon">{'\u2705'}</span>
+        <h3>Tous les {'\u00e9'}quipements sont conformes !</h3>
+        <p>Aucune anomalie d{'\u00e9'}tect{'\u00e9'}e selon vos r{'\u00e8'}gles d'audit.</p>
+      </div>
+    {:else}
+      <div class="filters-bar" style="margin-top:16px">
+        <select class="filter-select" bind:value={auditFilterType}>
+          <option value="">— Tous les types —</option>
+          {#each auditEquipTypes as t}<option value={t}>{t}</option>{/each}
+        </select>
+        <select class="filter-select" bind:value={auditFilterSeverity}>
+          <option value="">— Toutes s{'\u00e9'}v{'\u00e9'}rit{'\u00e9'}s —</option>
+          <option value="critical">{'\u{1F534}'} Critique</option>
+          <option value="warning">{'\u{1F7E1}'} Avertissement</option>
+        </select>
+        <span class="result-count">{filteredAuditIssues.length} probl{'\u00e8'}me{filteredAuditIssues.length !== 1 ? 's' : ''}</span>
+      </div>
+
+      <div class="table-wrapper" style="margin-top:8px">
+        <table>
+          <thead>
+            <tr>
+              <th>S{'\u00e9'}v{'\u00e9'}rit{'\u00e9'}</th>
+              <th>Hostname</th>
+              <th>Type</th>
+              <th>Champs manquants</th>
+              <th>Localisation actuelle</th>
+              <th>Utilisateur</th>
+              <th class="actions-col">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each filteredAuditIssues as issue}
+              <tr>
+                <td>
+                  {#if issue.severity === 'critical'}
+                    <span class="severity-badge critical">{'\u{1F534}'} Critique</span>
+                  {:else}
+                    <span class="severity-badge warning">{'\u{1F7E1}'} Avertissement</span>
+                  {/if}
+                </td>
+                <td class="hostname">{issue.hostname}</td>
+                <td><span class="type-badge">{issue.equip_type}</span></td>
+                <td>
+                  <div class="missing-tags">
+                    {#each issue.missing as m}
+                      <span class="missing-tag">{missingLabel(m)}</span>
+                    {/each}
+                  </div>
+                </td>
+                <td class="loc-cell">
+                  {#if issue.site_name}
+                    {issue.site_name}
+                    {#if issue.building_name} › {issue.building_name}{/if}
+                    {#if issue.room_name} › {issue.room_name}{/if}
+                  {:else}
+                    <span class="muted">—</span>
+                  {/if}
+                </td>
+                <td>{issue.last_user || '—'}</td>
+                <td class="actions-col">
+                  <button class="btn-icon" title="Modifier"
+                    on:click={() => { const eq = equipment.find(e => e.id === issue.id); if (eq) openEdit(eq); }}>
+                    {'\u270F\uFE0F'}
+                  </button>
+                </td>
+              </tr>
+            {/each}
+            {#if filteredAuditIssues.length === 0}
+              <tr><td colspan="7" class="empty-row">Aucun probl{'\u00e8'}me avec ces filtres</td></tr>
+            {/if}
+          </tbody>
+        </table>
+      </div>
+    {/if}
   {/if}
 </div>
 {/if}
@@ -638,36 +791,65 @@
 
   /* ── Tree Sidebar ───────────────────────────────────────── */
   .tree-sidebar {
-    width: 240px; min-width: 240px;
+    width: 260px; min-width: 260px;
     background: var(--bg-card, rgba(255,255,255,0.06));
     border: 1px solid var(--border-subtle, rgba(255,255,255,0.08));
-    border-radius: 12px; padding: 12px;
-    backdrop-filter: blur(12px); overflow-y: auto; max-height: 70vh;
+    border-radius: 14px; padding: 14px;
+    backdrop-filter: blur(16px); overflow-y: auto; max-height: 70vh;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
   }
   .tree-header {
-    display: flex; justify-content: space-between; align-items: center;
-    margin-bottom: 10px; font-size: 0.85rem; color: rgba(255,255,255,0.6);
+    display: flex; align-items: center; gap: 6px;
+    margin-bottom: 12px; padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    font-size: 0.9rem; color: rgba(255,255,255,0.7);
   }
+  .tree-header-icon { font-size: 1rem; }
+  .tree-header strong { flex: 1; letter-spacing: 0.3px; }
   .btn-clear {
     background: none; border: none; color: var(--accent, #6C63FF);
-    cursor: pointer; font-size: 0.75rem;
+    cursor: pointer; font-size: 0.75rem; opacity: 0.8;
   }
+  .btn-clear:hover { opacity: 1; text-decoration: underline; }
+  .tree-list { display: flex; flex-direction: column; gap: 2px; }
   .tree-item {
-    display: flex; align-items: center; gap: 4px; width: 100%;
-    background: none; border: none; color: rgba(255,255,255,0.8);
-    padding: 5px 6px; border-radius: 6px; cursor: pointer;
-    font-size: 0.82rem; text-align: left; transition: background 0.15s;
+    display: flex; align-items: center; gap: 6px; width: 100%;
+    background: none; border: none; color: rgba(255,255,255,0.75);
+    padding: 6px 8px; border-radius: 8px; cursor: pointer;
+    font-size: 0.82rem; text-align: left; transition: all 0.15s;
+    border: 1px solid transparent; font-family: inherit;
   }
-  .tree-item:hover { background: rgba(255,255,255,0.06); }
-  .tree-item.selected { background: rgba(108,99,255,0.2); color: #fff; }
-  .tree-toggle { width: 16px; text-align: center; font-size: 0.75rem; flex-shrink: 0; }
-  .tree-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tree-item:hover {
+    background: rgba(255,255,255,0.05);
+    border-color: rgba(255,255,255,0.06);
+  }
+  .tree-item.selected {
+    background: rgba(108,99,255,0.15); color: #fff;
+    border-color: rgba(108,99,255,0.3);
+    box-shadow: 0 0 8px rgba(108,99,255,0.1);
+  }
+  .tree-toggle {
+    width: 16px; display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; color: rgba(255,255,255,0.35);
+  }
+  .chevron { transition: transform 0.2s ease; }
+  .chevron.open { transform: rotate(90deg); }
+  .tree-ico { font-size: 0.85rem; flex-shrink: 0; line-height: 1; }
+  .tree-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
   .tree-count {
-    font-size: 0.7rem; color: rgba(255,255,255,0.35);
-    background: rgba(255,255,255,0.06); border-radius: 8px; padding: 1px 6px;
+    font-size: 0.68rem; color: rgba(var(--accent-rgb, 108,99,255), 0.8);
+    background: rgba(var(--accent-rgb, 108,99,255), 0.1);
+    border-radius: 10px; padding: 2px 7px; font-weight: 600;
+    min-width: 22px; text-align: center;
   }
-  .indent-1 { padding-left: 16px; }
-  .indent-2 { padding-left: 32px; }
+  .site-level { font-weight: 600; }
+  .tree-children {
+    margin-left: 12px; padding-left: 10px;
+    border-left: 1px solid rgba(255,255,255,0.06);
+  }
+  .building-level .tree-label { font-weight: 500; }
+  .room-level { padding-left: 24px; }
+  .room-level .tree-label { font-weight: 400; color: rgba(255,255,255,0.65); }
 
   /* ── Main content ───────────────────────────────────────── */
   .main-content { flex: 1; min-width: 0; }
@@ -732,20 +914,86 @@
   }
   .btn-icon:hover { background: rgba(255,255,255,0.08); }
 
-  /* ── Audit ──────────────────────────────────────────────── */
-  .audit-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px;
+  /* ── Audit (Smart) ──────────────────────────────────────── */
+  .audit-summary {
+    display: flex; gap: 10px; align-items: stretch; flex-wrap: wrap; margin-bottom: 16px;
   }
-  .audit-card {
+  .audit-stat-card {
     background: var(--bg-card, rgba(255,255,255,0.06));
     border: 1px solid var(--border-subtle, rgba(255,255,255,0.08));
-    border-radius: 12px; padding: 16px; backdrop-filter: blur(12px);
+    border-radius: 12px; padding: 12px 18px; text-align: center;
+    min-width: 100px; backdrop-filter: blur(12px);
+    display: flex; flex-direction: column; justify-content: center; gap: 4px;
   }
-  .audit-card.warning { border-color: #F59E0B; }
-  .audit-card h3 { margin: 0 0 10px; font-size: 0.95rem; color: #fff; }
-  .audit-card ul { list-style: none; padding: 0; margin: 0; max-height: 250px; overflow-y: auto; }
-  .audit-card li { padding: 3px 0; font-size: 0.82rem; color: rgba(255,255,255,0.75); }
-  .audit-card .ok { color: #22C55E; font-size: 0.85rem; }
+  .audit-stat-card.compliance { min-width: 140px; }
+  .audit-stat-card.ok-card { border-color: rgba(34,197,94,0.3); }
+  .audit-stat-card.warn-card.has-issues { border-color: #F59E0B; background: rgba(245,158,11,0.06); }
+  .audit-stat-card.crit-card.has-issues { border-color: #EF4444; background: rgba(239,68,68,0.06); }
+  .audit-stat-value { font-size: 1.4rem; font-weight: 700; color: #fff; }
+  .audit-stat-label { font-size: 0.7rem; color: rgba(255,255,255,0.45); text-transform: uppercase; letter-spacing: 0.05em; }
+  .audit-pct { font-size: 1.6rem; font-weight: 800; color: #22C55E; }
+  .audit-pct-bar {
+    height: 5px; background: rgba(255,255,255,0.08); border-radius: 4px;
+    overflow: hidden; margin: 4px 0;
+  }
+  .audit-pct-fill {
+    height: 100%; background: linear-gradient(90deg, #22C55E, #4ADE80);
+    border-radius: 4px; transition: width 0.5s ease;
+  }
+  .btn-rules {
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px; padding: 10px 16px; cursor: pointer;
+    color: rgba(255,255,255,0.7); font-size: 0.85rem; font-family: inherit;
+    transition: all 0.15s; display: flex; align-items: center; gap: 6px;
+  }
+  .btn-rules:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
+  /* Rules panel */
+  .rules-panel {
+    background: var(--bg-card, rgba(255,255,255,0.06));
+    border: 1px solid var(--border-subtle, rgba(255,255,255,0.08));
+    border-radius: 12px; padding: 20px; margin-bottom: 16px;
+    backdrop-filter: blur(12px);
+  }
+  .rules-panel h3 { margin: 0 0 6px; font-size: 1rem; color: #fff; }
+  .rules-help { font-size: 0.8rem; color: rgba(255,255,255,0.45); margin: 0 0 14px; }
+  .rules-table-wrap { overflow-x: auto; }
+  .rules-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  .rules-table th {
+    padding: 8px 10px; text-align: center; color: rgba(255,255,255,0.5);
+    font-weight: 600; font-size: 0.75rem; text-transform: uppercase;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .rules-table th:first-child { text-align: left; }
+  .rules-table td { padding: 6px 10px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .rules-table td:first-child { text-align: left; }
+  .rule-type { font-weight: 600; color: #fff; }
+  .rules-table input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent, #6C63FF); cursor: pointer; }
+  .rules-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; }
+
+  /* Severity badges */
+  .severity-badge {
+    border-radius: 6px; padding: 3px 8px; font-size: 0.72rem; font-weight: 600;
+  }
+  .severity-badge.critical { background: rgba(239,68,68,0.15); color: #EF4444; }
+  .severity-badge.warning { background: rgba(245,158,11,0.15); color: #F59E0B; }
+
+  /* Missing tags */
+  .missing-tags { display: flex; gap: 4px; flex-wrap: wrap; }
+  .missing-tag {
+    background: rgba(239,68,68,0.1); color: #F87171;
+    border-radius: 5px; padding: 2px 7px; font-size: 0.7rem; font-weight: 500;
+    white-space: nowrap;
+  }
+
+  /* All OK state */
+  .audit-all-ok {
+    text-align: center; padding: 60px 20px;
+    color: rgba(255,255,255,0.6);
+  }
+  .audit-ok-icon { font-size: 3rem; display: block; margin-bottom: 12px; }
+  .audit-all-ok h3 { color: #22C55E; margin: 0 0 8px; font-size: 1.2rem; }
+  .audit-all-ok p { margin: 0; font-size: 0.9rem; }
 
   /* ── Dialog ─────────────────────────────────────────────── */
   .dialog-overlay {
