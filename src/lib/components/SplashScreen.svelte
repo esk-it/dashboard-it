@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { createEventDispatcher } from 'svelte';
+  import logoUrl from '../../assets/logo.png';
 
   const dispatch = createEventDispatcher();
 
@@ -46,7 +47,7 @@
     <div class="splash-content">
       <!-- Logo / Icon -->
       <div class="splash-logo">
-        <span class="splash-icon">{'\u26A1'}</span>
+        <img src={logoUrl} alt="Logo" class="splash-logo-img" />
         <div class="splash-rings">
           <div class="ring ring-1"></div>
           <div class="ring ring-2"></div>
@@ -104,6 +105,15 @@
     justify-content: center;
   }
 
+  .splash-logo-img {
+    width: 72px;
+    height: 72px;
+    object-fit: contain;
+    z-index: 2;
+    position: relative;
+    filter: drop-shadow(0 0 20px rgba(6, 166, 201, 0.4));
+    animation: iconPulse 2s ease-in-out infinite;
+  }
   .splash-icon {
     font-size: 48px;
     z-index: 2;

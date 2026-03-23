@@ -19,8 +19,8 @@
   let clockTimer;
   let refreshTimer;
 
-  // Widget config
-  const WIDGETS = [
+  // Widget config — order, visibility, and size
+  const WIDGET_DEFS = [
     { id: 'priority', label: 'T\u00e2ches prioritaires', emoji: '\u{1F4CB}' },
     { id: 'sysmon', label: 'Monitoring syst\u00e8me', emoji: '\u{1F4BB}' },
     { id: 'gauge', label: 'Taux de compl\u00e9tion', emoji: '\u{1F4CA}' },
@@ -29,26 +29,66 @@
     { id: 'quicklinks', label: 'Acc\u00e8s rapides', emoji: '\u26A1' },
   ];
 
-  let visibleWidgets = {};
+  const SIZE_LABELS = { 1: '1/3', 2: '1/2', 3: 'Pleine' };
+  const DEFAULT_CONFIG = WIDGET_DEFS.map((w, i) => ({ id: w.id, visible: true, size: 2, order: i }));
+
+  let widgetConfig = []; // [{id, visible, size, order}]
   let showWidgetConfig = false;
+
+  // Derived: sorted visible widgets
+  $: orderedWidgets = [...widgetConfig].sort((a, b) => a.order - b.order).filter(w => w.visible);
 
   function loadWidgetConfig() {
     try {
-      const saved = localStorage.getItem('itm-widgets');
-      if (saved) { visibleWidgets = JSON.parse(saved); return; }
+      const saved = localStorage.getItem('itm-widgets-v2');
+      if (saved) { widgetConfig = JSON.parse(saved); return; }
     } catch {}
-    // Default: all visible
-    WIDGETS.forEach(w => visibleWidgets[w.id] = true);
+    widgetConfig = [...DEFAULT_CONFIG];
   }
 
   function saveWidgetConfig() {
-    localStorage.setItem('itm-widgets', JSON.stringify(visibleWidgets));
-    visibleWidgets = { ...visibleWidgets }; // trigger reactivity
+    localStorage.setItem('itm-widgets-v2', JSON.stringify(widgetConfig));
+    widgetConfig = [...widgetConfig]; // trigger reactivity
   }
 
   function toggleWidget(id) {
-    visibleWidgets[id] = !visibleWidgets[id];
+    const w = widgetConfig.find(w => w.id === id);
+    if (w) { w.visible = !w.visible; saveWidgetConfig(); }
+  }
+
+  function cycleSize(id) {
+    const w = widgetConfig.find(w => w.id === id);
+    if (w) {
+      // Cycle: 2 -> 3 -> 1 -> 2
+      w.size = w.size === 2 ? 3 : w.size === 3 ? 1 : 2;
+      saveWidgetConfig();
+    }
+  }
+
+  function moveWidget(id, dir) {
+    const idx = widgetConfig.findIndex(w => w.id === id);
+    const swapIdx = idx + dir;
+    if (swapIdx < 0 || swapIdx >= widgetConfig.length) return;
+    // Swap orders
+    const tmp = widgetConfig[idx].order;
+    widgetConfig[idx].order = widgetConfig[swapIdx].order;
+    widgetConfig[swapIdx].order = tmp;
     saveWidgetConfig();
+  }
+
+  function resetWidgetConfig() {
+    widgetConfig = [...DEFAULT_CONFIG];
+    saveWidgetConfig();
+  }
+
+  function getWidgetDef(id) {
+    return WIDGET_DEFS.find(w => w.id === id);
+  }
+
+  function sizeToSpan(size) {
+    if (size === 3) return 'span 6';
+    if (size === 1) return 'span 2';
+    return 'span 3'; // default: half
   }
 
   // KPI data
@@ -189,40 +229,49 @@
   {#if showWidgetConfig}
     <div class="widget-config">
       <div class="widget-config-header">
-        <span>{'\u2699\uFE0F'} Widgets affich{'\u00e9'}s</span>
-        <button class="btn-close-sm" on:click={() => showWidgetConfig = false}>{'\u2715'}</button>
+        <span>{'\u2699\uFE0F'} Configuration des widgets</span>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button class="btn-reset-sm" on:click={resetWidgetConfig}>R{'\u00e9'}initialiser</button>
+          <button class="btn-close-sm" on:click={() => showWidgetConfig = false}>{'\u2715'}</button>
+        </div>
       </div>
-      <div class="widget-toggles">
-        {#each WIDGETS as w}
-          <label class="widget-toggle">
-            <input type="checkbox" checked={visibleWidgets[w.id] !== false} on:change={() => toggleWidget(w.id)} />
-            <span>{w.emoji} {w.label}</span>
-          </label>
+      <div class="widget-config-list">
+        {#each [...widgetConfig].sort((a,b) => a.order - b.order) as wc, i (wc.id)}
+          {@const def = getWidgetDef(wc.id)}
+          {#if def}
+            <div class="widget-config-row" class:disabled={!wc.visible}>
+              <div class="wc-move">
+                <button class="wc-arrow" on:click={() => moveWidget(wc.id, -1)} disabled={i === 0}>{'\u25B2'}</button>
+                <button class="wc-arrow" on:click={() => moveWidget(wc.id, 1)} disabled={i === widgetConfig.length - 1}>{'\u25BC'}</button>
+              </div>
+              <label class="wc-toggle">
+                <input type="checkbox" checked={wc.visible} on:change={() => toggleWidget(wc.id)} />
+              </label>
+              <span class="wc-emoji">{def.emoji}</span>
+              <span class="wc-label">{def.label}</span>
+              <button class="wc-size" on:click={() => cycleSize(wc.id)} title="Changer la taille">
+                {SIZE_LABELS[wc.size] || '1/2'}
+              </button>
+            </div>
+          {/if}
         {/each}
       </div>
     </div>
   {/if}
 
-  <!-- Cards Grid -->
-  <div class="cards-grid">
-    {#if visibleWidgets.priority !== false}
-      <div class="card-slot"><PriorityCard bind:this={priorityCard} /></div>
-    {/if}
-    {#if visibleWidgets.sysmon !== false}
-      <div class="card-slot"><SysMonCard bind:this={sysMonCard} /></div>
-    {/if}
-    {#if visibleWidgets.gauge !== false}
-      <div class="card-slot"><GaugeChart bind:this={gaugeChart} /></div>
-    {/if}
-    {#if visibleWidgets.sparkline !== false}
-      <div class="card-slot"><SparklineChart bind:this={sparklineChart} /></div>
-    {/if}
-    {#if visibleWidgets.donut !== false}
-      <div class="card-slot"><DonutChart bind:this={donutChart} /></div>
-    {/if}
-    {#if visibleWidgets.quicklinks !== false}
-      <div class="card-slot"><QuickLinksCard /></div>
-    {/if}
+  <!-- Cards Grid (6-column base for flexible sizing) -->
+  <div class="cards-grid-flex">
+    {#each orderedWidgets as wc (wc.id)}
+      <div class="card-slot-flex" style="grid-column:{sizeToSpan(wc.size)}">
+        {#if wc.id === 'priority'}<PriorityCard bind:this={priorityCard} />
+        {:else if wc.id === 'sysmon'}<SysMonCard bind:this={sysMonCard} />
+        {:else if wc.id === 'gauge'}<GaugeChart bind:this={gaugeChart} />
+        {:else if wc.id === 'sparkline'}<SparklineChart bind:this={sparklineChart} />
+        {:else if wc.id === 'donut'}<DonutChart bind:this={donutChart} />
+        {:else if wc.id === 'quicklinks'}<QuickLinksCard />
+        {/if}
+      </div>
+    {/each}
   </div>
 </div>
 
@@ -344,59 +393,90 @@
     }
   }
 
-  /* Cards Grid */
-  .cards-grid {
+  /* Flexible Cards Grid — 6 columns base */
+  .cards-grid-flex {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(6, 1fr);
     gap: 16px;
   }
 
   @media (max-width: 900px) {
-    .cards-grid {
+    .cards-grid-flex {
       grid-template-columns: 1fr;
+    }
+    .card-slot-flex {
+      grid-column: span 1 !important;
     }
   }
 
-  .card-slot {
+  .card-slot-flex {
     animation: fadeIn 0.4s ease-out;
     animation-fill-mode: both;
+    min-width: 0;
   }
 
-  .card-slot:nth-child(1) { animation-delay: 0.05s; }
-  .card-slot:nth-child(2) { animation-delay: 0.1s; }
-  .card-slot:nth-child(3) { animation-delay: 0.15s; }
-  .card-slot:nth-child(4) { animation-delay: 0.2s; }
-  .card-slot:nth-child(5) { animation-delay: 0.25s; }
-  .card-slot:nth-child(6) { animation-delay: 0.3s; }
+  .card-slot-flex:nth-child(1) { animation-delay: 0.05s; }
+  .card-slot-flex:nth-child(2) { animation-delay: 0.1s; }
+  .card-slot-flex:nth-child(3) { animation-delay: 0.15s; }
+  .card-slot-flex:nth-child(4) { animation-delay: 0.2s; }
+  .card-slot-flex:nth-child(5) { animation-delay: 0.25s; }
+  .card-slot-flex:nth-child(6) { animation-delay: 0.3s; }
 
   /* Widget config panel */
   .widget-config {
     background: var(--bg-card);
     border: 1px solid var(--border-subtle);
     border-radius: 12px;
-    padding: 14px 18px;
+    padding: 16px 20px;
     margin-bottom: 16px;
     backdrop-filter: blur(12px);
     animation: fadeIn 0.2s ease-out;
   }
   .widget-config-header {
     display: flex; justify-content: space-between; align-items: center;
-    margin-bottom: 10px; font-size: 0.9rem; font-weight: 600; color: var(--text-primary);
+    margin-bottom: 12px; font-size: 0.9rem; font-weight: 600; color: var(--text-primary);
   }
   .btn-close-sm {
     background: none; border: none; color: var(--text-secondary);
     cursor: pointer; font-size: 1rem; padding: 2px 6px; border-radius: 4px;
   }
   .btn-close-sm:hover { background: var(--bg-hover); color: var(--text-primary); }
-  .widget-toggles {
-    display: flex; flex-wrap: wrap; gap: 12px;
+  .btn-reset-sm {
+    background: rgba(255,255,255,0.06); border: 1px solid var(--border-subtle);
+    border-radius: 6px; padding: 3px 10px; font-size: 0.72rem; color: var(--text-secondary);
+    cursor: pointer; font-family: inherit;
   }
-  .widget-toggle {
-    display: flex; align-items: center; gap: 6px;
-    font-size: 0.82rem; color: var(--text-secondary); cursor: pointer;
+  .btn-reset-sm:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+  .widget-config-list {
+    display: flex; flex-direction: column; gap: 6px;
   }
-  .widget-toggle input[type="checkbox"] {
-    width: 16px; height: 16px; accent-color: var(--accent);
-    cursor: pointer;
+  .widget-config-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 6px 8px; border-radius: 8px;
+    background: rgba(255,255,255,0.02);
+    transition: background 0.15s;
   }
+  .widget-config-row:hover { background: rgba(255,255,255,0.04); }
+  .widget-config-row.disabled { opacity: 0.4; }
+  .wc-move { display: flex; flex-direction: column; gap: 1px; }
+  .wc-arrow {
+    background: none; border: none; color: var(--text-muted); cursor: pointer;
+    font-size: 0.6rem; padding: 0 4px; line-height: 1; border-radius: 3px;
+  }
+  .wc-arrow:hover:not(:disabled) { color: var(--text-primary); background: var(--bg-hover); }
+  .wc-arrow:disabled { opacity: 0.2; cursor: default; }
+  .wc-toggle input[type="checkbox"] {
+    width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer;
+  }
+  .wc-emoji { font-size: 1rem; width: 20px; text-align: center; }
+  .wc-label { flex: 1; font-size: 0.82rem; color: var(--text-secondary); }
+  .wc-size {
+    background: rgba(var(--accent-rgb), 0.1); color: var(--accent);
+    border: 1px solid rgba(var(--accent-rgb), 0.2); border-radius: 6px;
+    padding: 2px 10px; font-size: 0.72rem; font-weight: 600; cursor: pointer;
+    font-family: inherit; min-width: 50px; text-align: center;
+    transition: all 0.15s;
+  }
+  .wc-size:hover { background: rgba(var(--accent-rgb), 0.2); }
 </style>

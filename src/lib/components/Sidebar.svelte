@@ -1,6 +1,7 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
   import { currentPage, navItems } from '../stores/navigation.js';
+  import logoUrl from '../../assets/logo.png';
 
   let hovered = false;
   let appVersion = '';
@@ -12,7 +13,7 @@
       const { getVersion } = await import('@tauri-apps/api/app');
       appVersion = await getVersion();
     } catch {
-      appVersion = '3.3.0';
+      appVersion = '3.4.0';
     }
     loadOverdueCount();
     interval = setInterval(loadOverdueCount, 60000);
@@ -47,7 +48,7 @@
   <div class="sidebar-inner">
     <!-- Brand -->
     <div class="brand">
-      <span class="brand-icon">{'\u26A1'}</span>
+      <img src={logoUrl} alt="Logo" class="brand-logo" />
       {#if hovered}
         <span class="brand-text">ITManager</span>
       {/if}
@@ -148,6 +149,14 @@
     margin-bottom: 8px;
     white-space: nowrap;
     overflow: hidden;
+  }
+
+  .brand-logo {
+    width: 30px;
+    height: 30px;
+    object-fit: contain;
+    flex-shrink: 0;
+    border-radius: 6px;
   }
 
   .brand-icon {

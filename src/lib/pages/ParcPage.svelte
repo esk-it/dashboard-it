@@ -171,15 +171,53 @@
     return labels[key] || key;
   }
 
+  // ── Export PDF helpers ──────────────────────────────────────
+  import logoUrl from '../../assets/logo.png';
+
+  async function savePdfWithDialog(doc, defaultName) {
+    try {
+      const { save } = await import('@tauri-apps/plugin-dialog');
+      const path = await save({
+        defaultPath: defaultName,
+        filters: [{ name: 'PDF', extensions: ['pdf'] }],
+      });
+      if (!path) return; // user cancelled
+      const { writeBinaryFile } = await import('@tauri-apps/plugin-fs');
+      const pdfBytes = doc.output('arraybuffer');
+      await writeBinaryFile(path, new Uint8Array(pdfBytes));
+      success(`PDF enregistr\u00e9 : ${path.split(/[\\/]/).pop()}`);
+    } catch {
+      // Fallback: browser download (dev mode or if Tauri dialog unavailable)
+      doc.save(defaultName);
+      success('PDF export\u00e9');
+    }
+  }
+
+  function addPdfHeader(doc, title, subtitle) {
+    // Try to add logo
+    try {
+      doc.addImage(logoUrl, 'PNG', 14, 8, 18, 18);
+      doc.setFontSize(16);
+      doc.text(title, 36, 18);
+      doc.setFontSize(9);
+      doc.text(subtitle, 36, 24);
+      return 30;
+    } catch {
+      doc.setFontSize(16);
+      doc.text(title, 14, 16);
+      doc.setFontSize(9);
+      doc.text(subtitle, 14, 23);
+      return 28;
+    }
+  }
+
   // ── Export PDF ─────────────────────────────────────────────
   async function exportInventoryPdf() {
     const { default: jsPDF } = await import('jspdf');
     await import('jspdf-autotable');
     const doc = new jsPDF('landscape');
-    doc.setFontSize(16);
-    doc.text('Inventaire du Parc Informatique', 14, 16);
-    doc.setFontSize(9);
-    doc.text(`Export\u00e9 le ${new Date().toLocaleDateString('fr-FR')} — ${filteredEquipment.length} \u00e9quipements`, 14, 23);
+    const startY = addPdfHeader(doc, 'Inventaire du Parc Informatique',
+      `Export\u00e9 le ${new Date().toLocaleDateString('fr-FR')} \u2014 ${filteredEquipment.length} \u00e9quipements`);
 
     const headers = [['Hostname', 'Type', 'OS', 'N\u00b0 S\u00e9rie', 'Marque/Mod\u00e8le', 'Site', 'B\u00e2timent', 'Salle', 'Source', 'Utilisateur']];
     const rows = filteredEquipment.map(e => [
@@ -189,9 +227,8 @@
       e.source, e.last_user || '',
     ]);
 
-    doc.autoTable({ head: headers, body: rows, startY: 28, styles: { fontSize: 7, cellPadding: 2 }, headStyles: { fillColor: [6, 166, 201] } });
-    doc.save(`inventaire_parc_${new Date().toISOString().slice(0,10)}.pdf`);
-    success('PDF export\u00e9');
+    doc.autoTable({ head: headers, body: rows, startY, styles: { fontSize: 7, cellPadding: 2 }, headStyles: { fillColor: [6, 166, 201] } });
+    await savePdfWithDialog(doc, `inventaire_parc_${new Date().toISOString().slice(0,10)}.pdf`);
   }
 
   async function exportAuditPdf() {
@@ -199,10 +236,8 @@
     const { default: jsPDF } = await import('jspdf');
     await import('jspdf-autotable');
     const doc = new jsPDF('landscape');
-    doc.setFontSize(16);
-    doc.text('Audit Parc Informatique', 14, 16);
-    doc.setFontSize(9);
-    doc.text(`Conformit\u00e9 : ${auditData.summary.compliance_percent}% — ${auditData.summary.critical} critiques, ${auditData.summary.warnings} avertissements`, 14, 23);
+    const startY = addPdfHeader(doc, 'Audit Parc Informatique',
+      `Conformit\u00e9 : ${auditData.summary.compliance_percent}% \u2014 ${auditData.summary.critical} critiques, ${auditData.summary.warnings} avertissements`);
 
     const headers = [['Hostname', 'Type', 'S\u00e9v\u00e9rit\u00e9', 'Champs manquants', 'Site', 'B\u00e2timent', 'Salle', 'Utilisateur']];
     const rows = auditData.issues.map(i => [
@@ -211,9 +246,8 @@
       i.site_name || '', i.building_name || '', i.room_name || '', i.last_user || '',
     ]);
 
-    doc.autoTable({ head: headers, body: rows, startY: 28, styles: { fontSize: 7, cellPadding: 2 }, headStyles: { fillColor: [239, 68, 68] } });
-    doc.save(`audit_parc_${new Date().toISOString().slice(0,10)}.pdf`);
-    success('PDF audit export\u00e9');
+    doc.autoTable({ head: headers, body: rows, startY, styles: { fontSize: 7, cellPadding: 2 }, headStyles: { fillColor: [239, 68, 68] } });
+    await savePdfWithDialog(doc, `audit_parc_${new Date().toISOString().slice(0,10)}.pdf`);
   }
 
   // ── QR Labels ─────────────────────────────────────────────
@@ -273,7 +307,7 @@
         doc.rect(x, y, labelW, labelH);
       }
 
-      doc.save(`etiquettes_qr_parc_${new Date().toISOString().slice(0,10)}.pdf`);
+      await savePdfWithDialog(doc, `etiquettes_qr_parc_${new Date().toISOString().slice(0,10)}.pdf`);
       showQrDialog = false;
       success(`${qrEquipments.length} \u00e9tiquettes g\u00e9n\u00e9r\u00e9es`);
     } catch (e) {
