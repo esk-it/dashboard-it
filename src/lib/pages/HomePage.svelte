@@ -91,6 +91,59 @@
     return 'span 3'; // default: half
   }
 
+  // ── Drag & Drop ─────────────────────────────────────────
+  let dragId = null;
+  let dragReady = false;
+  let holdTimer = null;
+
+  function onDragHandleDown(e, id) {
+    // Start a timer — after 1.5s, enable dragging
+    dragReady = false;
+    holdTimer = setTimeout(() => {
+      dragReady = true;
+      dragId = id;
+    }, 1200);
+  }
+
+  function onDragHandleUp() {
+    clearTimeout(holdTimer);
+    if (!dragReady) { dragId = null; }
+  }
+
+  function onDragStart(e, id) {
+    if (!dragReady) { e.preventDefault(); return; }
+    dragId = id;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', id);
+  }
+
+  function onDragOver(e, targetId) {
+    if (!dragId || dragId === targetId) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  }
+
+  function onDrop(e, targetId) {
+    e.preventDefault();
+    if (!dragId || dragId === targetId) return;
+    // Swap orders
+    const srcWc = widgetConfig.find(w => w.id === dragId);
+    const tgtWc = widgetConfig.find(w => w.id === targetId);
+    if (srcWc && tgtWc) {
+      const tmp = srcWc.order;
+      srcWc.order = tgtWc.order;
+      tgtWc.order = tmp;
+      saveWidgetConfig();
+    }
+    dragId = null;
+    dragReady = false;
+  }
+
+  function onDragEnd() {
+    dragId = null;
+    dragReady = false;
+  }
+
   // KPI data
   let kpiTasks = 0;
   let kpiOverdue = 0;
@@ -262,14 +315,41 @@
   <!-- Cards Grid (6-column base for flexible sizing) -->
   <div class="cards-grid-flex">
     {#each orderedWidgets as wc (wc.id)}
-      <div class="card-slot-flex" style="grid-column:{sizeToSpan(wc.size)}">
-        {#if wc.id === 'priority'}<PriorityCard bind:this={priorityCard} />
-        {:else if wc.id === 'sysmon'}<SysMonCard bind:this={sysMonCard} />
-        {:else if wc.id === 'gauge'}<GaugeChart bind:this={gaugeChart} />
-        {:else if wc.id === 'sparkline'}<SparklineChart bind:this={sparklineChart} />
-        {:else if wc.id === 'donut'}<DonutChart bind:this={donutChart} />
-        {:else if wc.id === 'quicklinks'}<QuickLinksCard />
-        {/if}
+      {@const def = getWidgetDef(wc.id)}
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div
+        class="card-slot-flex"
+        class:dragging={dragId === wc.id}
+        class:drag-ready={dragReady && dragId === wc.id}
+        style="grid-column:{sizeToSpan(wc.size)}"
+        draggable={dragReady && dragId === wc.id}
+        on:dragstart={(e) => onDragStart(e, wc.id)}
+        on:dragover={(e) => onDragOver(e, wc.id)}
+        on:drop={(e) => onDrop(e, wc.id)}
+        on:dragend={onDragEnd}
+      >
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+          class="widget-drag-handle"
+          on:mousedown={(e) => onDragHandleDown(e, wc.id)}
+          on:mouseup={onDragHandleUp}
+          on:mouseleave={onDragHandleUp}
+        >
+          <span class="drag-dots">{'\u2630'}</span>
+          <span class="drag-title">{def?.emoji} {def?.label}</span>
+          <button class="drag-size-btn" on:mousedown|stopPropagation on:click={() => cycleSize(wc.id)} title="Changer la taille">
+            {SIZE_LABELS[wc.size]}
+          </button>
+        </div>
+        <div class="widget-body">
+          {#if wc.id === 'priority'}<PriorityCard bind:this={priorityCard} />
+          {:else if wc.id === 'sysmon'}<SysMonCard bind:this={sysMonCard} />
+          {:else if wc.id === 'gauge'}<GaugeChart bind:this={gaugeChart} />
+          {:else if wc.id === 'sparkline'}<SparklineChart bind:this={sparklineChart} />
+          {:else if wc.id === 'donut'}<DonutChart bind:this={donutChart} />
+          {:else if wc.id === 'quicklinks'}<QuickLinksCard />
+          {/if}
+        </div>
       </div>
     {/each}
   </div>
@@ -398,6 +478,7 @@
     display: grid;
     grid-template-columns: repeat(6, 1fr);
     gap: 16px;
+    align-items: stretch;
   }
 
   @media (max-width: 900px) {
@@ -413,6 +494,77 @@
     animation: fadeIn 0.4s ease-out;
     animation-fill-mode: both;
     min-width: 0;
+    display: flex;
+    flex-direction: column;
+    border-radius: 14px;
+    overflow: hidden;
+    background: var(--bg-card, rgba(255,255,255,0.06));
+    border: 1px solid var(--border-subtle, rgba(255,255,255,0.08));
+    backdrop-filter: blur(12px);
+    transition: box-shadow 0.2s, border-color 0.2s, opacity 0.2s;
+  }
+  .card-slot-flex.drag-ready {
+    border-color: var(--accent, #6C63FF);
+    box-shadow: 0 0 16px rgba(108,99,255,0.2);
+    cursor: grabbing;
+  }
+  .card-slot-flex.dragging {
+    opacity: 0.5;
+  }
+
+  /* Drag handle (title bar) */
+  .widget-drag-handle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: rgba(255,255,255,0.02);
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    cursor: grab;
+    user-select: none;
+    flex-shrink: 0;
+  }
+  .widget-drag-handle:active { cursor: grabbing; }
+  .drag-dots {
+    font-size: 12px;
+    color: rgba(255,255,255,0.15);
+    line-height: 1;
+  }
+  .drag-title {
+    flex: 1;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: rgba(255,255,255,0.35);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .drag-size-btn {
+    background: rgba(var(--accent-rgb, 108,99,255), 0.1);
+    color: var(--accent, #6C63FF);
+    border: 1px solid rgba(var(--accent-rgb, 108,99,255), 0.15);
+    border-radius: 5px;
+    padding: 1px 8px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+  .drag-size-btn:hover { background: rgba(var(--accent-rgb, 108,99,255), 0.2); }
+
+  .widget-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  /* Make cards inside widget-body fill the space */
+  .widget-body > :global(*) {
+    flex: 1;
+    border: none !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
   }
 
   .card-slot-flex:nth-child(1) { animation-delay: 0.05s; }
