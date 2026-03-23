@@ -166,7 +166,7 @@
   <div class="title-row">
     <h1>Sécurité — WithSecure</h1>
     <div class="header-actions">
-      <button class="btn-icon-text" on:click={openConfig} title="Configuration">
+      <button class="btn-icon-text" on:click={() => { import('../stores/navigation.js').then(m => m.currentPage.set('/settings')); }} title="Configuration dans Paramètres > Intégrations">
         ⚙️ Config
       </button>
       <button class="btn-primary" on:click={triggerSync} disabled={syncing || !config.configured}>

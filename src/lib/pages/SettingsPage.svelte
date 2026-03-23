@@ -44,6 +44,11 @@
   let resetConfirmText = '';
   let resetting = false;
 
+  // WithSecure integration
+  let wsConfig = null;
+  let wsForm = { client_id: '', client_secret: '' };
+  let wsSaving = false;
+
   // GLPI integration
   let glpiConfig = null;
   let glpiForm = { url: '', app_token: '', user_token: '' };
@@ -363,6 +368,46 @@
     navigator.clipboard.writeText(text);
   }
 
+  // ── WithSecure ───────────────────────────────────────
+  const WS_API = 'http://localhost:8010/api/security';
+
+  async function loadWsConfig() {
+    try {
+      const res = await fetch(`${WS_API}/config`);
+      const cfg = await res.json();
+      wsConfig = cfg.configured ? cfg : null;
+    } catch (e) {
+      wsConfig = null;
+    }
+  }
+
+  async function saveWsConfig() {
+    if (!wsForm.client_id || !wsForm.client_secret) return;
+    wsSaving = true;
+    try {
+      await fetch(`${WS_API}/config`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(wsForm),
+      });
+      showSaved();
+      await loadWsConfig();
+      wsForm = { client_id: '', client_secret: '' };
+    } catch (e) {
+      console.error('WS config save failed:', e);
+    }
+    wsSaving = false;
+  }
+
+  async function deleteWsConfig() {
+    try {
+      await fetch(`${WS_API}/config`, { method: 'DELETE' });
+      wsConfig = null;
+      wsForm = { client_id: '', client_secret: '' };
+      showSaved();
+    } catch (e) {}
+  }
+
   // ── GLPI ─────────────────────────────────────────────
   const GLPI_API = 'http://localhost:8010/api/glpi';
 
@@ -411,7 +456,7 @@
   }
 
   // Load DB info & backups when switching to those panels
-  $: if (activePanel === 2) loadGlpiConfig();
+  $: if (activePanel === 2) { loadGlpiConfig(); loadWsConfig(); }
   $: if (activePanel === 3) loadDbInfo();
   $: if (activePanel === 5) loadBackups();
 
@@ -686,13 +731,49 @@
             <div class="int-header">
               <span class="int-icon">{'\u{1F6E1}\uFE0F'}</span>
               <div class="int-info">
-                <h3>WithSecure</h3>
-                <p>Protection endpoint — configuration dans le module S{'\u00e9'}curit{'\u00e9'}</p>
+                <h3>WithSecure Elements</h3>
+                <p>Protection endpoint — OAuth2 Client Credentials</p>
               </div>
-              <a href="#" class="int-link" on:click|preventDefault={() => {
-                const { currentPage } = window.__stores || {};
-                if (currentPage) currentPage.set('/security');
-              }}>Configurer {'\u2192'}</a>
+              <span class="int-badge" class:active-badge={wsConfig} class:soon={!wsConfig}>
+                {wsConfig ? 'Actif' : 'Non configur\u00e9'}
+              </span>
+            </div>
+            <div class="gw-config-form">
+              {#if wsConfig}
+                <div class="gw-status-grid">
+                  <div class="gw-status-item">
+                    <span>{'\u2705'}</span>
+                    <span>Client ID : {wsConfig.client_id}</span>
+                  </div>
+                  <div class="gw-status-item">
+                    <span>{'\u{1F511}'}</span>
+                    <span>Secret : {wsConfig.client_secret}</span>
+                  </div>
+                </div>
+                <div style="display:flex;gap:8px;margin-top:8px">
+                  <button class="btn-danger" on:click={deleteWsConfig} style="font-size:0.75rem;padding:4px 10px">
+                    Supprimer la configuration
+                  </button>
+                </div>
+              {/if}
+              <div class="glpi-form">
+                <p class="gw-help" style="margin-bottom:8px">
+                  {wsConfig ? 'Modifier la configuration :' : 'Entrez vos identifiants API WithSecure Elements :'}
+                </p>
+                <div class="glpi-fields">
+                  <input type="text" bind:value={wsForm.client_id}
+                    placeholder={wsConfig ? wsConfig.client_id : 'Client ID'}
+                    class="glpi-input" />
+                  <input type="password" bind:value={wsForm.client_secret}
+                    placeholder="Client Secret"
+                    class="glpi-input" />
+                  <button class="btn-small" style="background:var(--accent,#06A6C9);color:#fff;font-weight:600"
+                    on:click={saveWsConfig}
+                    disabled={wsSaving || !wsForm.client_id || !wsForm.client_secret}>
+                    {wsSaving ? 'Enregistrement...' : 'Enregistrer'}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 

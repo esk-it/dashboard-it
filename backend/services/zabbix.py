@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from datetime import datetime
 from pathlib import Path
 
@@ -15,7 +16,10 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-DATA_DIR = Path(__file__).parent.parent / "data"
+if os.environ.get("ITMANAGER_DATA_DIR"):
+    DATA_DIR = Path(os.environ["ITMANAGER_DATA_DIR"]) / "data"
+else:
+    DATA_DIR = Path(__file__).parent.parent / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 CONFIG_PATH = DATA_DIR / "zabbix_config.json"

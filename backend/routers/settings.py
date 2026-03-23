@@ -503,7 +503,7 @@ async def reset_data(payload: dict = Body(...)):
     _write_json(RSS_FILE, RSS_DEFAULTS)
 
     # Also clear GLPI/WithSecure caches
-    data_dir = Path(__file__).resolve().parent.parent / "data"
+    data_dir = BACKEND_DIR / "data"
     for cache_file in ["glpi_cache.json", "glpi_config.json", "ws_cache.json", "ws_config.json"]:
         p = data_dir / cache_file
         if p.exists():
