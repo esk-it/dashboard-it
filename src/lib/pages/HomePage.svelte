@@ -91,57 +91,47 @@
     return 'span 3'; // default: half
   }
 
-  // ── Drag & Drop ─────────────────────────────────────────
-  let dragId = null;
-  let dragReady = false;
+  // ── Click-to-swap widget reorder ─────────────────────────
+  let swapSourceId = null;
   let holdTimer = null;
 
-  function onDragHandleDown(e, id) {
-    // Start a timer — after 1.5s, enable dragging
-    dragReady = false;
+  function onWidgetMouseDown(e, id) {
+    // Ignore if clicking a button/input inside the widget
+    if (e.target.closest('button, input, select, a, textarea')) return;
     holdTimer = setTimeout(() => {
-      dragReady = true;
-      dragId = id;
+      swapSourceId = id;
     }, 1200);
   }
 
-  function onDragHandleUp() {
+  function onWidgetMouseUp(id) {
     clearTimeout(holdTimer);
-    if (!dragReady) { dragId = null; }
   }
 
-  function onDragStart(e, id) {
-    if (!dragReady) { e.preventDefault(); return; }
-    dragId = id;
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', id);
+  function onWidgetMouseLeave() {
+    clearTimeout(holdTimer);
   }
 
-  function onDragOver(e, targetId) {
-    if (!dragId || dragId === targetId) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  }
-
-  function onDrop(e, targetId) {
-    e.preventDefault();
-    if (!dragId || dragId === targetId) return;
+  function onWidgetClick(id) {
+    if (!swapSourceId) return;
+    if (swapSourceId === id) {
+      // Click on same widget = cancel
+      swapSourceId = null;
+      return;
+    }
     // Swap orders
-    const srcWc = widgetConfig.find(w => w.id === dragId);
-    const tgtWc = widgetConfig.find(w => w.id === targetId);
+    const srcWc = widgetConfig.find(w => w.id === swapSourceId);
+    const tgtWc = widgetConfig.find(w => w.id === id);
     if (srcWc && tgtWc) {
       const tmp = srcWc.order;
       srcWc.order = tgtWc.order;
       tgtWc.order = tmp;
       saveWidgetConfig();
     }
-    dragId = null;
-    dragReady = false;
+    swapSourceId = null;
   }
 
-  function onDragEnd() {
-    dragId = null;
-    dragReady = false;
+  function cancelSwap() {
+    swapSourceId = null;
   }
 
   // KPI data
@@ -312,44 +302,36 @@
     </div>
   {/if}
 
+  <!-- Swap mode overlay -->
+  {#if swapSourceId}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="swap-hint" on:click={cancelSwap}>
+      {'\u{1F504}'} Cliquez sur un autre widget pour {'\u00e9'}changer, ou cliquez ici pour annuler
+    </div>
+  {/if}
+
   <!-- Cards Grid (6-column base for flexible sizing) -->
   <div class="cards-grid-flex">
     {#each orderedWidgets as wc (wc.id)}
-      {@const def = getWidgetDef(wc.id)}
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
         class="card-slot-flex"
-        class:dragging={dragId === wc.id}
-        class:drag-ready={dragReady && dragId === wc.id}
+        class:swap-source={swapSourceId === wc.id}
+        class:swap-target={swapSourceId && swapSourceId !== wc.id}
         style="grid-column:{sizeToSpan(wc.size)}"
-        draggable={dragReady && dragId === wc.id}
-        on:dragstart={(e) => onDragStart(e, wc.id)}
-        on:dragover={(e) => onDragOver(e, wc.id)}
-        on:drop={(e) => onDrop(e, wc.id)}
-        on:dragend={onDragEnd}
+        on:mousedown={(e) => onWidgetMouseDown(e, wc.id)}
+        on:mouseup={() => onWidgetMouseUp(wc.id)}
+        on:mouseleave={onWidgetMouseLeave}
+        on:click={() => onWidgetClick(wc.id)}
       >
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div
-          class="widget-drag-handle"
-          on:mousedown={(e) => onDragHandleDown(e, wc.id)}
-          on:mouseup={onDragHandleUp}
-          on:mouseleave={onDragHandleUp}
-        >
-          <span class="drag-dots">{'\u2630'}</span>
-          <span class="drag-title">{def?.emoji} {def?.label}</span>
-          <button class="drag-size-btn" on:mousedown|stopPropagation on:click={() => cycleSize(wc.id)} title="Changer la taille">
-            {SIZE_LABELS[wc.size]}
-          </button>
-        </div>
-        <div class="widget-body">
-          {#if wc.id === 'priority'}<PriorityCard bind:this={priorityCard} />
-          {:else if wc.id === 'sysmon'}<SysMonCard bind:this={sysMonCard} />
-          {:else if wc.id === 'gauge'}<GaugeChart bind:this={gaugeChart} />
-          {:else if wc.id === 'sparkline'}<SparklineChart bind:this={sparklineChart} />
-          {:else if wc.id === 'donut'}<DonutChart bind:this={donutChart} />
-          {:else if wc.id === 'quicklinks'}<QuickLinksCard />
-          {/if}
-        </div>
+        {#if wc.id === 'priority'}<PriorityCard bind:this={priorityCard} />
+        {:else if wc.id === 'sysmon'}<SysMonCard bind:this={sysMonCard} />
+        {:else if wc.id === 'gauge'}<GaugeChart bind:this={gaugeChart} />
+        {:else if wc.id === 'sparkline'}<SparklineChart bind:this={sparklineChart} />
+        {:else if wc.id === 'donut'}<DonutChart bind:this={donutChart} />
+        {:else if wc.id === 'quicklinks'}<QuickLinksCard />
+        {/if}
       </div>
     {/each}
   </div>
@@ -494,78 +476,70 @@
     animation: fadeIn 0.4s ease-out;
     animation-fill-mode: both;
     min-width: 0;
-    display: flex;
-    flex-direction: column;
+    transition: box-shadow 0.3s, border-color 0.3s, transform 0.2s;
     border-radius: 14px;
-    overflow: hidden;
-    background: var(--bg-card, rgba(255,255,255,0.06));
-    border: 1px solid var(--border-subtle, rgba(255,255,255,0.08));
-    backdrop-filter: blur(12px);
-    transition: box-shadow 0.2s, border-color 0.2s, opacity 0.2s;
+    position: relative;
   }
-  .card-slot-flex.drag-ready {
+
+  /* Swap mode styles */
+  .card-slot-flex.swap-source {
+    box-shadow: 0 0 20px rgba(108,99,255,0.35);
     border-color: var(--accent, #6C63FF);
-    box-shadow: 0 0 16px rgba(108,99,255,0.2);
-    cursor: grabbing;
+    transform: scale(0.98);
+    z-index: 2;
   }
-  .card-slot-flex.dragging {
-    opacity: 0.5;
-  }
-
-  /* Drag handle (title bar) */
-  .widget-drag-handle {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 12px;
-    background: rgba(255,255,255,0.02);
-    border-bottom: 1px solid rgba(255,255,255,0.04);
-    cursor: grab;
-    user-select: none;
-    flex-shrink: 0;
-  }
-  .widget-drag-handle:active { cursor: grabbing; }
-  .drag-dots {
-    font-size: 12px;
-    color: rgba(255,255,255,0.15);
-    line-height: 1;
-  }
-  .drag-title {
-    flex: 1;
-    font-size: 0.72rem;
+  .card-slot-flex.swap-source::after {
+    content: '\u2705 S\00e9lectionn\00e9';
+    position: absolute;
+    top: 8px; right: 8px;
+    background: var(--accent, #6C63FF);
+    color: #fff;
+    font-size: 0.68rem;
     font-weight: 600;
-    color: rgba(255,255,255,0.35);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    padding: 3px 10px;
+    border-radius: 8px;
+    z-index: 10;
+    pointer-events: none;
   }
-  .drag-size-btn {
-    background: rgba(var(--accent-rgb, 108,99,255), 0.1);
-    color: var(--accent, #6C63FF);
-    border: 1px solid rgba(var(--accent-rgb, 108,99,255), 0.15);
-    border-radius: 5px;
-    padding: 1px 8px;
-    font-size: 0.65rem;
-    font-weight: 600;
+  .card-slot-flex.swap-target {
     cursor: pointer;
-    font-family: inherit;
-    transition: all 0.15s;
   }
-  .drag-size-btn:hover { background: rgba(var(--accent-rgb, 108,99,255), 0.2); }
+  .card-slot-flex.swap-target::after {
+    content: '\u{1F4CD} D\00e9poser ici';
+    position: absolute;
+    top: 8px; right: 8px;
+    background: rgba(34,197,94,0.9);
+    color: #fff;
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 8px;
+    z-index: 10;
+    pointer-events: none;
+    animation: targetPulse 1s ease-in-out infinite;
+  }
+  .card-slot-flex.swap-target:hover {
+    box-shadow: 0 0 16px rgba(34,197,94,0.3);
+    transform: scale(1.01);
+  }
+  @keyframes targetPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
 
-  .widget-body {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
+  .swap-hint {
+    background: rgba(108,99,255,0.1);
+    border: 1px solid rgba(108,99,255,0.2);
+    border-radius: 10px;
+    padding: 10px 16px;
+    margin-bottom: 12px;
+    font-size: 0.82rem;
+    color: var(--accent, #6C63FF);
+    text-align: center;
+    cursor: pointer;
+    animation: fadeIn 0.2s ease;
   }
-  /* Make cards inside widget-body fill the space */
-  .widget-body > :global(*) {
-    flex: 1;
-    border: none !important;
-    border-radius: 0 !important;
-    background: transparent !important;
-    backdrop-filter: none !important;
-  }
+  .swap-hint:hover { background: rgba(108,99,255,0.15); }
 
   .card-slot-flex:nth-child(1) { animation-delay: 0.05s; }
   .card-slot-flex:nth-child(2) { animation-delay: 0.1s; }
