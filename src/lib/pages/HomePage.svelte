@@ -19,6 +19,38 @@
   let clockTimer;
   let refreshTimer;
 
+  // Widget config
+  const WIDGETS = [
+    { id: 'priority', label: 'T\u00e2ches prioritaires', emoji: '\u{1F4CB}' },
+    { id: 'sysmon', label: 'Monitoring syst\u00e8me', emoji: '\u{1F4BB}' },
+    { id: 'gauge', label: 'Taux de compl\u00e9tion', emoji: '\u{1F4CA}' },
+    { id: 'sparkline', label: 'Activit\u00e9 hebdo', emoji: '\u{1F4C8}' },
+    { id: 'donut', label: 'Cat\u00e9gories', emoji: '\u{1F369}' },
+    { id: 'quicklinks', label: 'Acc\u00e8s rapides', emoji: '\u26A1' },
+  ];
+
+  let visibleWidgets = {};
+  let showWidgetConfig = false;
+
+  function loadWidgetConfig() {
+    try {
+      const saved = localStorage.getItem('itm-widgets');
+      if (saved) { visibleWidgets = JSON.parse(saved); return; }
+    } catch {}
+    // Default: all visible
+    WIDGETS.forEach(w => visibleWidgets[w.id] = true);
+  }
+
+  function saveWidgetConfig() {
+    localStorage.setItem('itm-widgets', JSON.stringify(visibleWidgets));
+    visibleWidgets = { ...visibleWidgets }; // trigger reactivity
+  }
+
+  function toggleWidget(id) {
+    visibleWidgets[id] = !visibleWidgets[id];
+    saveWidgetConfig();
+  }
+
   // KPI data
   let kpiTasks = 0;
   let kpiOverdue = 0;
@@ -79,6 +111,7 @@
   }
 
   onMount(() => {
+    loadWidgetConfig();
     updateClock();
     clockTimer = setInterval(updateClock, 1000);
     fetchKpis();
@@ -107,6 +140,9 @@
       <div class="clock-frame">
         <span class="clock">{clockStr}</span>
       </div>
+      <button class="btn-ghost" on:click={() => showWidgetConfig = !showWidgetConfig} title="Configurer les widgets">
+        {'\u2699\uFE0F'} Widgets
+      </button>
       <button class="btn-ghost" on:click={refreshAll}>
         {'\u{1F504}'} Actualiser
       </button>
@@ -149,26 +185,44 @@
     />
   </div>
 
+  <!-- Widget Config Panel -->
+  {#if showWidgetConfig}
+    <div class="widget-config">
+      <div class="widget-config-header">
+        <span>{'\u2699\uFE0F'} Widgets affich{'\u00e9'}s</span>
+        <button class="btn-close-sm" on:click={() => showWidgetConfig = false}>{'\u2715'}</button>
+      </div>
+      <div class="widget-toggles">
+        {#each WIDGETS as w}
+          <label class="widget-toggle">
+            <input type="checkbox" checked={visibleWidgets[w.id] !== false} on:change={() => toggleWidget(w.id)} />
+            <span>{w.emoji} {w.label}</span>
+          </label>
+        {/each}
+      </div>
+    </div>
+  {/if}
+
   <!-- Cards Grid -->
   <div class="cards-grid">
-    <div class="card-slot">
-      <PriorityCard bind:this={priorityCard} />
-    </div>
-    <div class="card-slot">
-      <SysMonCard bind:this={sysMonCard} />
-    </div>
-    <div class="card-slot">
-      <GaugeChart bind:this={gaugeChart} />
-    </div>
-    <div class="card-slot">
-      <SparklineChart bind:this={sparklineChart} />
-    </div>
-    <div class="card-slot">
-      <DonutChart bind:this={donutChart} />
-    </div>
-    <div class="card-slot">
-      <QuickLinksCard />
-    </div>
+    {#if visibleWidgets.priority !== false}
+      <div class="card-slot"><PriorityCard bind:this={priorityCard} /></div>
+    {/if}
+    {#if visibleWidgets.sysmon !== false}
+      <div class="card-slot"><SysMonCard bind:this={sysMonCard} /></div>
+    {/if}
+    {#if visibleWidgets.gauge !== false}
+      <div class="card-slot"><GaugeChart bind:this={gaugeChart} /></div>
+    {/if}
+    {#if visibleWidgets.sparkline !== false}
+      <div class="card-slot"><SparklineChart bind:this={sparklineChart} /></div>
+    {/if}
+    {#if visibleWidgets.donut !== false}
+      <div class="card-slot"><DonutChart bind:this={donutChart} /></div>
+    {/if}
+    {#if visibleWidgets.quicklinks !== false}
+      <div class="card-slot"><QuickLinksCard /></div>
+    {/if}
   </div>
 </div>
 
@@ -314,4 +368,35 @@
   .card-slot:nth-child(4) { animation-delay: 0.2s; }
   .card-slot:nth-child(5) { animation-delay: 0.25s; }
   .card-slot:nth-child(6) { animation-delay: 0.3s; }
+
+  /* Widget config panel */
+  .widget-config {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    padding: 14px 18px;
+    margin-bottom: 16px;
+    backdrop-filter: blur(12px);
+    animation: fadeIn 0.2s ease-out;
+  }
+  .widget-config-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 10px; font-size: 0.9rem; font-weight: 600; color: var(--text-primary);
+  }
+  .btn-close-sm {
+    background: none; border: none; color: var(--text-secondary);
+    cursor: pointer; font-size: 1rem; padding: 2px 6px; border-radius: 4px;
+  }
+  .btn-close-sm:hover { background: var(--bg-hover); color: var(--text-primary); }
+  .widget-toggles {
+    display: flex; flex-wrap: wrap; gap: 12px;
+  }
+  .widget-toggle {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 0.82rem; color: var(--text-secondary); cursor: pointer;
+  }
+  .widget-toggle input[type="checkbox"] {
+    width: 16px; height: 16px; accent-color: var(--accent);
+    cursor: pointer;
+  }
 </style>

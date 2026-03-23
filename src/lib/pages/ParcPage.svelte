@@ -171,6 +171,117 @@
     return labels[key] || key;
   }
 
+  // ── Export PDF ─────────────────────────────────────────────
+  async function exportInventoryPdf() {
+    const { default: jsPDF } = await import('jspdf');
+    await import('jspdf-autotable');
+    const doc = new jsPDF('landscape');
+    doc.setFontSize(16);
+    doc.text('Inventaire du Parc Informatique', 14, 16);
+    doc.setFontSize(9);
+    doc.text(`Export\u00e9 le ${new Date().toLocaleDateString('fr-FR')} — ${filteredEquipment.length} \u00e9quipements`, 14, 23);
+
+    const headers = [['Hostname', 'Type', 'OS', 'N\u00b0 S\u00e9rie', 'Marque/Mod\u00e8le', 'Site', 'B\u00e2timent', 'Salle', 'Source', 'Utilisateur']];
+    const rows = filteredEquipment.map(e => [
+      e.hostname, e.equip_type, e.os, e.serial_number,
+      [e.brand, e.model].filter(Boolean).join(' '),
+      e.site_name || '', e.building_name || '', e.room_name || '',
+      e.source, e.last_user || '',
+    ]);
+
+    doc.autoTable({ head: headers, body: rows, startY: 28, styles: { fontSize: 7, cellPadding: 2 }, headStyles: { fillColor: [6, 166, 201] } });
+    doc.save(`inventaire_parc_${new Date().toISOString().slice(0,10)}.pdf`);
+    success('PDF export\u00e9');
+  }
+
+  async function exportAuditPdf() {
+    if (!auditData) return;
+    const { default: jsPDF } = await import('jspdf');
+    await import('jspdf-autotable');
+    const doc = new jsPDF('landscape');
+    doc.setFontSize(16);
+    doc.text('Audit Parc Informatique', 14, 16);
+    doc.setFontSize(9);
+    doc.text(`Conformit\u00e9 : ${auditData.summary.compliance_percent}% — ${auditData.summary.critical} critiques, ${auditData.summary.warnings} avertissements`, 14, 23);
+
+    const headers = [['Hostname', 'Type', 'S\u00e9v\u00e9rit\u00e9', 'Champs manquants', 'Site', 'B\u00e2timent', 'Salle', 'Utilisateur']];
+    const rows = auditData.issues.map(i => [
+      i.hostname, i.equip_type, i.severity === 'critical' ? 'Critique' : 'Avertissement',
+      i.missing.map(m => missingLabel(m)).join(', '),
+      i.site_name || '', i.building_name || '', i.room_name || '', i.last_user || '',
+    ]);
+
+    doc.autoTable({ head: headers, body: rows, startY: 28, styles: { fontSize: 7, cellPadding: 2 }, headStyles: { fillColor: [239, 68, 68] } });
+    doc.save(`audit_parc_${new Date().toISOString().slice(0,10)}.pdf`);
+    success('PDF audit export\u00e9');
+  }
+
+  // ── QR Labels ─────────────────────────────────────────────
+  let showQrDialog = false;
+  let qrEquipments = [];
+  let qrGenerating = false;
+
+  function openQrLabels() {
+    qrEquipments = filteredEquipment.slice(0, 50);
+    showQrDialog = true;
+  }
+
+  async function generateQrLabels() {
+    qrGenerating = true;
+    try {
+      const QRCode = (await import('qrcode')).default;
+      const { default: jsPDF } = await import('jspdf');
+      const doc = new jsPDF('portrait');
+
+      const perRow = 3;
+      const labelW = 60;
+      const labelH = 35;
+      const marginX = 10;
+      const marginY = 10;
+      const gapX = 5;
+      const gapY = 5;
+
+      for (let i = 0; i < qrEquipments.length; i++) {
+        const eq = qrEquipments[i];
+        const pageIdx = Math.floor(i / 21); // 3 cols x 7 rows = 21 per page
+        const posOnPage = i % 21;
+        const col = posOnPage % perRow;
+        const row = Math.floor(posOnPage / perRow);
+
+        if (i > 0 && posOnPage === 0) doc.addPage();
+
+        const x = marginX + col * (labelW + gapX);
+        const y = marginY + row * (labelH + gapY);
+
+        // QR code
+        const qrData = `${eq.hostname}|${eq.serial_number || ''}|${eq.equip_type}`;
+        const qrDataUrl = await QRCode.toDataURL(qrData, { width: 80, margin: 1 });
+        doc.addImage(qrDataUrl, 'PNG', x + 1, y + 1, 18, 18);
+
+        // Text
+        doc.setFontSize(8);
+        doc.setFont(undefined, 'bold');
+        doc.text(eq.hostname || '—', x + 21, y + 6);
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(6);
+        doc.text(`Type: ${eq.equip_type}`, x + 21, y + 11);
+        doc.text(`SN: ${eq.serial_number || '—'}`, x + 21, y + 15);
+        doc.text(`Site: ${eq.site_name || '—'}`, x + 21, y + 19);
+
+        // Border
+        doc.setDrawColor(200);
+        doc.rect(x, y, labelW, labelH);
+      }
+
+      doc.save(`etiquettes_qr_parc_${new Date().toISOString().slice(0,10)}.pdf`);
+      showQrDialog = false;
+      success(`${qrEquipments.length} \u00e9tiquettes g\u00e9n\u00e9r\u00e9es`);
+    } catch (e) {
+      toastError('Erreur : ' + e.message);
+    }
+    qrGenerating = false;
+  }
+
   // ── Sidebar ────────────────────────────────────────────────
   function toggleSite(siteId) {
     expandedSites[siteId] = !expandedSites[siteId];
@@ -319,6 +430,12 @@
           <span class="sync-info">Dernière sync : {new Date(glpiStats.last_sync).toLocaleString('fr-FR')}</span>
         {/if}
       {/if}
+      <button class="btn-export" on:click={exportInventoryPdf} title="Exporter l'inventaire en PDF">
+        {'\u{1F4C4}'} PDF
+      </button>
+      <button class="btn-export" on:click={openQrLabels} title="{'\u00C9'}tiquettes QR">
+        {'\u{1F3F7}\uFE0F'} QR Labels
+      </button>
       <button class="btn-primary" on:click={openNew}>+ Ajouter</button>
     </div>
   </div>
@@ -515,6 +632,9 @@
       </div>
       <button class="btn-rules" on:click={() => showRulesPanel = !showRulesPanel}>
         {'\u2699\uFE0F'} R{'\u00e8'}gles
+      </button>
+      <button class="btn-rules" on:click={exportAuditPdf}>
+        {'\u{1F4C4}'} Export PDF
       </button>
     </div>
 
@@ -736,6 +856,33 @@
       <button class="btn-secondary" on:click={() => confirmDelete = null}>Annuler</button>
       <button class="btn-danger" on:click={deleteEquipment} disabled={deleting}>
         {deleting ? 'Suppression…' : 'Supprimer'}
+      </button>
+    </div>
+  </div>
+</div>
+{/if}
+
+<!-- ── QR Labels Dialog ───────────────────────────────────── -->
+{#if showQrDialog}
+<div class="dialog-overlay" on:click|self={() => showQrDialog = false}>
+  <div class="dialog">
+    <div class="dialog-header">
+      <h2>{'\u{1F3F7}\uFE0F'} {'\u00C9'}tiquettes QR</h2>
+      <button class="btn-close" on:click={() => showQrDialog = false}>{'\u00D7'}</button>
+    </div>
+    <div class="dialog-body">
+      <p style="font-size:0.85rem;color:rgba(255,255,255,0.6);margin-bottom:12px">
+        G{'\u00e9'}n{'\u00e9'}rer des {'\u00e9'}tiquettes QR code pour coller sur les {'\u00e9'}quipements.
+        Chaque {'\u00e9'}tiquette contient le hostname, type, n{'\u00b0'} de s{'\u00e9'}rie et site.
+      </p>
+      <p style="font-size:0.9rem;margin-bottom:8px">
+        <strong>{qrEquipments.length}</strong> {'\u00e9'}quipements s{'\u00e9'}lectionn{'\u00e9'}s (filtre actuel, max 50)
+      </p>
+    </div>
+    <div class="dialog-footer">
+      <button class="btn-secondary" on:click={() => showQrDialog = false}>Annuler</button>
+      <button class="btn-primary" on:click={generateQrLabels} disabled={qrGenerating}>
+        {qrGenerating ? 'G\u00e9n\u00e9ration...' : `G\u00e9n\u00e9rer ${qrEquipments.length} \u00e9tiquettes`}
       </button>
     </div>
   </div>
@@ -1070,6 +1217,13 @@
   }
   .btn-sync:hover { background: rgba(34,197,94,0.25); }
   .btn-sync:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-export {
+    background: rgba(108,99,255,0.1); color: var(--accent, #6C63FF);
+    border: 1px solid rgba(108,99,255,0.25); border-radius: 8px;
+    padding: 7px 12px; cursor: pointer; font-size: 0.8rem;
+    font-weight: 600; transition: all 0.2s; font-family: inherit;
+  }
+  .btn-export:hover { background: rgba(108,99,255,0.2); }
   .sync-info {
     font-size: 0.72rem; color: rgba(255,255,255,0.4);
     white-space: nowrap;

@@ -1,7 +1,7 @@
 {
   "name": "dashboard-web",
   "private": true,
-  "version": "3.2.0",
+  "version": "3.3.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -23,8 +23,11 @@
     "@xterm/xterm": "^6.0.0",
     "chart.js": "^4.5.1",
     "guacamole-common-js": "^1.5.0",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.7",
     "lucide-svelte": "^0.577.0",
     "marked": "^17.0.4",
+    "qrcode": "^1.5.4",
     "svelte-chartjs": "^4.0.0",
     "svelte-spa-router": "^4.0.2"
   }
