@@ -479,6 +479,14 @@
     transition: box-shadow 0.3s, border-color 0.3s, transform 0.2s;
     border-radius: 14px;
     position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+  /* Force child card components to fill the full height */
+  .card-slot-flex > :global(*) {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
   }
 
   /* Swap mode styles */
