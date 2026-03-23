@@ -1,18 +1,33 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { currentPage, navItems } from '../stores/navigation.js';
 
   let hovered = false;
   let appVersion = '';
+  let overdueCount = 0;
+  let interval;
 
   onMount(async () => {
     try {
       const { getVersion } = await import('@tauri-apps/api/app');
       appVersion = await getVersion();
     } catch {
-      appVersion = '2.5.5';
+      appVersion = '3.0.0';
     }
+    loadOverdueCount();
+    interval = setInterval(loadOverdueCount, 60000);
   });
+
+  onDestroy(() => { if (interval) clearInterval(interval); });
+
+  async function loadOverdueCount() {
+    try {
+      const res = await fetch('http://localhost:8010/api/tasks?status=open');
+      const tasks = await res.json();
+      const today = new Date().toISOString().slice(0, 10);
+      overdueCount = tasks.filter(t => t.due_date && t.due_date < today && !t.done).length;
+    } catch { /* ignore */ }
+  }
 
   function navigate(path) {
     currentPage.set(path);
@@ -55,6 +70,9 @@
             <span class="nav-emoji">{item.emoji}</span>
             {#if hovered}
               <span class="nav-label">{item.label}</span>
+            {/if}
+            {#if item.key === 'tasks' && overdueCount > 0}
+              <span class="overdue-badge">{overdueCount}</span>
             {/if}
           </div>
         {/if}
@@ -230,6 +248,29 @@
     border-radius: 50%;
     background: var(--text-muted);
     opacity: 0.5;
+  }
+
+  /* Overdue badge */
+  .overdue-badge {
+    position: absolute;
+    top: 4px; right: 4px;
+    background: #EF4444;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    min-width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    box-shadow: 0 0 6px rgba(239,68,68,0.4);
+    animation: badgePulse 2s ease-in-out infinite;
+  }
+  @keyframes badgePulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
   }
 
   @keyframes fadeLabel {

@@ -48,6 +48,8 @@
   <Sidebar />
 
 <main class="content">
+  {#key $currentPage}
+  <div class="page-transition">
   {#if $currentPage === '/'}
     <HomePage />
   {:else if $currentPage === '/news'}
@@ -77,6 +79,8 @@
   {:else}
     <PlaceholderPage title="Page introuvable" emoji={'\u{1F50D}'} />
   {/if}
+  </div>
+  {/key}
 </main>
 
 <Toast />
@@ -93,5 +97,12 @@
     overflow-x: hidden;
     padding: 28px 32px;
     min-height: 100vh;
+  }
+  .page-transition {
+    animation: pageIn 0.25s ease-out;
+  }
+  @keyframes pageIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 </style>
