@@ -143,13 +143,31 @@ async def weather():
         return _weather_cache["data"]
 
     try:
+        # Check if user configured a city in settings
+        from .settings import GENERAL_FILE, GENERAL_DEFAULTS, _ensure_file, _read_json
+        settings_path = _ensure_file(GENERAL_FILE, "general_settings.json", GENERAL_DEFAULTS)
+        settings = _read_json(settings_path)
+        configured_city = (settings.get("weather_city") or "").strip()
+
         async with httpx.AsyncClient(timeout=10) as client:
-            # 1. Get location from IP (ip-api.com is more reliable and free)
-            geo = await client.get("http://ip-api.com/json/?fields=city,lat,lon")
-            geo_data = geo.json()
-            lat = geo_data.get("lat", 48.86)
-            lon = geo_data.get("lon", 2.35)
-            city = geo_data.get("city", "Paris")
+            if configured_city:
+                # Use Open-Meteo geocoding to resolve city name → coordinates
+                geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={configured_city}&count=1&language=fr"
+                geo = await client.get(geo_url)
+                geo_results = geo.json().get("results", [])
+                if geo_results:
+                    lat = geo_results[0]["latitude"]
+                    lon = geo_results[0]["longitude"]
+                    city = geo_results[0].get("name", configured_city)
+                else:
+                    lat, lon, city = 48.86, 2.35, configured_city
+            else:
+                # Fallback: IP geolocation
+                geo = await client.get("http://ip-api.com/json/?fields=city,lat,lon")
+                geo_data = geo.json()
+                lat = geo_data.get("lat", 48.86)
+                lon = geo_data.get("lon", 2.35)
+                city = geo_data.get("city", "Paris")
 
             # 2. Get weather from Open-Meteo (free, no key)
             weather_url = (

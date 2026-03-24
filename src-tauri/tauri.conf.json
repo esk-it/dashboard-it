@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "ITManager-Dashboard",
-  "version": "3.5.1",
+  "version": "3.5.2",
   "identifier": "com.esk-it.itmanager-dashboard",
   "build": {
     "frontendDist": "../dist",

@@ -605,6 +605,10 @@
               <span>Nom d'utilisateur</span>
               <input type="text" bind:value={general.username} on:change={saveGeneral} placeholder="Admin" />
             </label>
+            <label class="setting-row">
+              <span>Ville (m{'\u00e9'}t{'\u00e9'}o)</span>
+              <input type="text" bind:value={general.weather_city} on:change={saveGeneral} placeholder="Auto (g{'\u00e9'}olocalisation IP)" />
+            </label>
           </div>
 
           <div class="setting-section">

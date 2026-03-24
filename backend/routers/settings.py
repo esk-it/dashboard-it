@@ -135,6 +135,7 @@ GENERAL_DEFAULTS = {
     "card_layout": [],
     "show_alert_ws": True,
     "show_alert_warranty": True,
+    "weather_city": "",
 }
 
 THEME_DEFAULTS = {
