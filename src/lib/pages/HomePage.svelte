@@ -91,19 +91,20 @@
     return 'span 3'; // default: half
   }
 
-  // ── Click-to-swap widget reorder ─────────────────────────
-  let swapSourceId = null;
+  // ── Click-to-move widget reorder ─────────────────────────
+  // Long press selects a widget, then click on any position to INSERT it there
+  // (not swap — the widget moves, others shift to fill the gap)
+  let moveSourceId = null;
   let holdTimer = null;
 
   function onWidgetMouseDown(e, id) {
-    // Ignore if clicking a button/input inside the widget
     if (e.target.closest('button, input, select, a, textarea')) return;
     holdTimer = setTimeout(() => {
-      swapSourceId = id;
+      moveSourceId = id;
     }, 1200);
   }
 
-  function onWidgetMouseUp(id) {
+  function onWidgetMouseUp() {
     clearTimeout(holdTimer);
   }
 
@@ -112,26 +113,33 @@
   }
 
   function onWidgetClick(id) {
-    if (!swapSourceId) return;
-    if (swapSourceId === id) {
-      // Click on same widget = cancel
-      swapSourceId = null;
+    if (!moveSourceId) return;
+    if (moveSourceId === id) {
+      moveSourceId = null;
       return;
     }
-    // Swap orders
-    const srcWc = widgetConfig.find(w => w.id === swapSourceId);
-    const tgtWc = widgetConfig.find(w => w.id === id);
-    if (srcWc && tgtWc) {
-      const tmp = srcWc.order;
-      srcWc.order = tgtWc.order;
-      tgtWc.order = tmp;
-      saveWidgetConfig();
-    }
-    swapSourceId = null;
+    // Move source widget to target's position, shift others
+    const sorted = [...widgetConfig].sort((a, b) => a.order - b.order);
+    const srcIdx = sorted.findIndex(w => w.id === moveSourceId);
+    const tgtIdx = sorted.findIndex(w => w.id === id);
+    if (srcIdx === -1 || tgtIdx === -1) { moveSourceId = null; return; }
+
+    // Remove source from array, insert at target position
+    const [moved] = sorted.splice(srcIdx, 1);
+    sorted.splice(tgtIdx, 0, moved);
+
+    // Reassign sequential orders
+    sorted.forEach((w, i) => {
+      const cfg = widgetConfig.find(c => c.id === w.id);
+      if (cfg) cfg.order = i;
+    });
+
+    saveWidgetConfig();
+    moveSourceId = null;
   }
 
-  function cancelSwap() {
-    swapSourceId = null;
+  function cancelMove() {
+    moveSourceId = null;
   }
 
   // KPI data
@@ -303,11 +311,11 @@
   {/if}
 
   <!-- Swap mode overlay -->
-  {#if swapSourceId}
+  {#if moveSourceId}
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="swap-hint" on:click={cancelSwap}>
-      {'\u{1F504}'} Cliquez sur un autre widget pour {'\u00e9'}changer, ou cliquez ici pour annuler
+    <div class="move-hint" on:click={cancelMove}>
+      {'\u{1F4CD}'} Cliquez sur la position o{'\u00f9'} vous voulez d{'\u00e9'}placer ce widget, ou cliquez ici pour annuler
     </div>
   {/if}
 
@@ -317,8 +325,8 @@
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
         class="card-slot-flex"
-        class:swap-source={swapSourceId === wc.id}
-        class:swap-target={swapSourceId && swapSourceId !== wc.id}
+        class:move-source={moveSourceId === wc.id}
+        class:move-target={moveSourceId && moveSourceId !== wc.id}
         style="grid-column:{sizeToSpan(wc.size)}"
         on:mousedown={(e) => onWidgetMouseDown(e, wc.id)}
         on:mouseup={() => onWidgetMouseUp(wc.id)}
@@ -490,13 +498,13 @@
   }
 
   /* Swap mode styles */
-  .card-slot-flex.swap-source {
+  .card-slot-flex.move-source {
     box-shadow: 0 0 20px rgba(108,99,255,0.35);
     border-color: var(--accent, #6C63FF);
     transform: scale(0.98);
     z-index: 2;
   }
-  .card-slot-flex.swap-source::after {
+  .card-slot-flex.move-source::after {
     content: '\u2705 S\00e9lectionn\00e9';
     position: absolute;
     top: 8px; right: 8px;
@@ -509,11 +517,11 @@
     z-index: 10;
     pointer-events: none;
   }
-  .card-slot-flex.swap-target {
+  .card-slot-flex.move-target {
     cursor: pointer;
   }
-  .card-slot-flex.swap-target::after {
-    content: '\u{1F4CD} D\00e9poser ici';
+  .card-slot-flex.move-target::after {
+    content: '\u2194 D\00e9placer ici';
     position: absolute;
     top: 8px; right: 8px;
     background: rgba(34,197,94,0.9);
@@ -526,7 +534,7 @@
     pointer-events: none;
     animation: targetPulse 1s ease-in-out infinite;
   }
-  .card-slot-flex.swap-target:hover {
+  .card-slot-flex.move-target:hover {
     box-shadow: 0 0 16px rgba(34,197,94,0.3);
     transform: scale(1.01);
   }
@@ -535,7 +543,7 @@
     50% { opacity: 0.7; }
   }
 
-  .swap-hint {
+  .move-hint {
     background: rgba(108,99,255,0.1);
     border: 1px solid rgba(108,99,255,0.2);
     border-radius: 10px;
@@ -547,7 +555,7 @@
     cursor: pointer;
     animation: fadeIn 0.2s ease;
   }
-  .swap-hint:hover { background: rgba(108,99,255,0.15); }
+  .move-hint:hover { background: rgba(108,99,255,0.15); }
 
   .card-slot-flex:nth-child(1) { animation-delay: 0.05s; }
   .card-slot-flex:nth-child(2) { animation-delay: 0.1s; }
