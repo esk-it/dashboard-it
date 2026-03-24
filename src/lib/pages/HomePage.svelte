@@ -91,9 +91,9 @@
     return 'span 3'; // default: half
   }
 
-  // ── Click-to-move widget reorder ─────────────────────────
-  // Long press selects a widget, then click on any position to INSERT it there
-  // (not swap — the widget moves, others shift to fill the gap)
+  // ── Widget reorder with drop zones ──────────────────────
+  // Long press selects a widget, then drop zones appear BETWEEN widgets
+  // Click a drop zone to insert the widget at that position
   let moveSourceId = null;
   let holdTimer = null;
 
@@ -112,21 +112,17 @@
     clearTimeout(holdTimer);
   }
 
-  function onWidgetClick(id) {
+  function insertWidgetAt(targetOrder) {
     if (!moveSourceId) return;
-    if (moveSourceId === id) {
-      moveSourceId = null;
-      return;
-    }
-    // Move source widget to target's position, shift others
     const sorted = [...widgetConfig].sort((a, b) => a.order - b.order);
     const srcIdx = sorted.findIndex(w => w.id === moveSourceId);
-    const tgtIdx = sorted.findIndex(w => w.id === id);
-    if (srcIdx === -1 || tgtIdx === -1) { moveSourceId = null; return; }
+    if (srcIdx === -1) { moveSourceId = null; return; }
 
-    // Remove source from array, insert at target position
+    // Remove source
     const [moved] = sorted.splice(srcIdx, 1);
-    sorted.splice(tgtIdx, 0, moved);
+    // Insert at the target position (clamped)
+    const insertAt = Math.min(targetOrder, sorted.length);
+    sorted.splice(insertAt, 0, moved);
 
     // Reassign sequential orders
     sorted.forEach((w, i) => {
@@ -310,28 +306,37 @@
     </div>
   {/if}
 
-  <!-- Swap mode overlay -->
+  <!-- Move mode hint -->
   {#if moveSourceId}
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="move-hint" on:click={cancelMove}>
-      {'\u{1F4CD}'} Cliquez sur la position o{'\u00f9'} vous voulez d{'\u00e9'}placer ce widget, ou cliquez ici pour annuler
+      {'\u2195\uFE0F'} Cliquez sur une zone verte pour placer le widget, ou cliquez ici pour annuler
     </div>
   {/if}
 
   <!-- Cards Grid (6-column base for flexible sizing) -->
   <div class="cards-grid-flex">
-    {#each orderedWidgets as wc (wc.id)}
+    {#each orderedWidgets as wc, i (wc.id)}
+      <!-- Drop zone BEFORE this widget (only in move mode) -->
+      {#if moveSourceId && moveSourceId !== wc.id}
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div class="drop-zone" style="grid-column:{sizeToSpan(wc.size)}" on:click={() => insertWidgetAt(i)}>
+          <div class="drop-zone-line"></div>
+          <span class="drop-zone-label">{'\u2B07'} Ins{'\u00e9'}rer ici</span>
+          <div class="drop-zone-line"></div>
+        </div>
+      {/if}
+
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
         class="card-slot-flex"
         class:move-source={moveSourceId === wc.id}
-        class:move-target={moveSourceId && moveSourceId !== wc.id}
         style="grid-column:{sizeToSpan(wc.size)}"
         on:mousedown={(e) => onWidgetMouseDown(e, wc.id)}
-        on:mouseup={() => onWidgetMouseUp(wc.id)}
+        on:mouseup={onWidgetMouseUp}
         on:mouseleave={onWidgetMouseLeave}
-        on:click={() => onWidgetClick(wc.id)}
       >
         {#if wc.id === 'priority'}<PriorityCard bind:this={priorityCard} />
         {:else if wc.id === 'sysmon'}<SysMonCard bind:this={sysMonCard} />
@@ -342,6 +347,17 @@
         {/if}
       </div>
     {/each}
+
+    <!-- Drop zone at the END (to move widget to last position) -->
+    {#if moveSourceId}
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div class="drop-zone drop-zone-end" style="grid-column:span 6" on:click={() => insertWidgetAt(orderedWidgets.length)}>
+        <div class="drop-zone-line"></div>
+        <span class="drop-zone-label">{'\u2B07'} Ins{'\u00e9'}rer en dernier</span>
+        <div class="drop-zone-line"></div>
+      </div>
+    {/if}
   </div>
 </div>
 
@@ -497,50 +513,65 @@
     flex-direction: column;
   }
 
-  /* Swap mode styles */
+  /* Move mode styles */
   .card-slot-flex.move-source {
     box-shadow: 0 0 20px rgba(108,99,255,0.35);
-    border-color: var(--accent, #6C63FF);
-    transform: scale(0.98);
+    transform: scale(0.96);
+    opacity: 0.6;
     z-index: 2;
   }
   .card-slot-flex.move-source::after {
     content: '\u2705 S\00e9lectionn\00e9';
     position: absolute;
-    top: 8px; right: 8px;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
     background: var(--accent, #6C63FF);
     color: #fff;
-    font-size: 0.68rem;
-    font-weight: 600;
-    padding: 3px 10px;
-    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    padding: 8px 20px;
+    border-radius: 10px;
     z-index: 10;
     pointer-events: none;
+    box-shadow: 0 4px 16px rgba(108,99,255,0.4);
   }
-  .card-slot-flex.move-target {
+
+  /* Drop zones between widgets */
+  .drop-zone {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
     cursor: pointer;
+    border-radius: 10px;
+    transition: all 0.15s;
+    min-height: 36px;
   }
-  .card-slot-flex.move-target::after {
-    content: '\u2194 D\00e9placer ici';
-    position: absolute;
-    top: 8px; right: 8px;
-    background: rgba(34,197,94,0.9);
-    color: #fff;
-    font-size: 0.68rem;
+  .drop-zone:hover {
+    background: rgba(34,197,94,0.08);
+  }
+  .drop-zone:hover .drop-zone-line {
+    background: #22C55E;
+    height: 3px;
+  }
+  .drop-zone:hover .drop-zone-label {
+    color: #22C55E;
+    opacity: 1;
+  }
+  .drop-zone-line {
+    flex: 1;
+    height: 2px;
+    background: rgba(34,197,94,0.3);
+    border-radius: 2px;
+    transition: all 0.15s;
+  }
+  .drop-zone-label {
+    font-size: 0.72rem;
     font-weight: 600;
-    padding: 3px 10px;
-    border-radius: 8px;
-    z-index: 10;
-    pointer-events: none;
-    animation: targetPulse 1s ease-in-out infinite;
-  }
-  .card-slot-flex.move-target:hover {
-    box-shadow: 0 0 16px rgba(34,197,94,0.3);
-    transform: scale(1.01);
-  }
-  @keyframes targetPulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.7; }
+    color: rgba(34,197,94,0.5);
+    white-space: nowrap;
+    transition: all 0.15s;
+    opacity: 0.7;
   }
 
   .move-hint {
