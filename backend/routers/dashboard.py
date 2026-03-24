@@ -144,11 +144,11 @@ async def weather():
 
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            # 1. Get location from IP
-            geo = await client.get("https://ipapi.co/json/")
+            # 1. Get location from IP (ip-api.com is more reliable and free)
+            geo = await client.get("http://ip-api.com/json/?fields=city,lat,lon")
             geo_data = geo.json()
-            lat = geo_data.get("latitude", 48.86)
-            lon = geo_data.get("longitude", 2.35)
+            lat = geo_data.get("lat", 48.86)
+            lon = geo_data.get("lon", 2.35)
             city = geo_data.get("city", "Paris")
 
             # 2. Get weather from Open-Meteo (free, no key)
@@ -201,17 +201,17 @@ async def weather():
 def _wmo_code(code: int) -> dict:
     """Convert WMO weather code to description + emoji."""
     mapping = {
-        0: ("Ciel d\u00e9gag\u00e9", "\u2600\uFE0F"), 1: ("Peu nuageux", "\u{1F324}\uFE0F"),
-        2: ("Partiellement nuageux", "\u26C5"), 3: ("Couvert", "\u2601\uFE0F"),
-        45: ("Brouillard", "\u{1F32B}\uFE0F"), 48: ("Brouillard givrant", "\u{1F32B}\uFE0F"),
-        51: ("Bruine l\u00e9g\u00e8re", "\u{1F326}\uFE0F"), 53: ("Bruine", "\u{1F326}\uFE0F"), 55: ("Bruine forte", "\u{1F327}\uFE0F"),
-        61: ("Pluie l\u00e9g\u00e8re", "\u{1F326}\uFE0F"), 63: ("Pluie", "\u{1F327}\uFE0F"), 65: ("Pluie forte", "\u{1F327}\uFE0F"),
-        71: ("Neige l\u00e9g\u00e8re", "\u{1F328}\uFE0F"), 73: ("Neige", "\u2744\uFE0F"), 75: ("Neige forte", "\u2744\uFE0F"),
-        80: ("Averses", "\u{1F326}\uFE0F"), 81: ("Averses mod\u00e9r\u00e9es", "\u{1F327}\uFE0F"), 82: ("Averses violentes", "\u{1F327}\uFE0F"),
-        85: ("Averses de neige", "\u{1F328}\uFE0F"), 86: ("Averses de neige fortes", "\u{1F328}\uFE0F"),
-        95: ("Orage", "\u26C8\uFE0F"), 96: ("Orage gr\u00eale", "\u26C8\uFE0F"), 99: ("Orage gr\u00eale fort", "\u26C8\uFE0F"),
+        0: ("Ciel dégagé", "☀️"), 1: ("Peu nuageux", "🌤️"),
+        2: ("Partiellement nuageux", "⛅"), 3: ("Couvert", "☁️"),
+        45: ("Brouillard", "🌫️"), 48: ("Brouillard givrant", "🌫️"),
+        51: ("Bruine légère", "🌦️"), 53: ("Bruine", "🌦️"), 55: ("Bruine forte", "🌧️"),
+        61: ("Pluie légère", "🌦️"), 63: ("Pluie", "🌧️"), 65: ("Pluie forte", "🌧️"),
+        71: ("Neige légère", "🌨️"), 73: ("Neige", "❄️"), 75: ("Neige forte", "❄️"),
+        80: ("Averses", "🌦️"), 81: ("Averses modérées", "🌧️"), 82: ("Averses violentes", "🌧️"),
+        85: ("Averses de neige", "🌨️"), 86: ("Averses de neige fortes", "🌨️"),
+        95: ("Orage", "⛈️"), 96: ("Orage grêle", "⛈️"), 99: ("Orage grêle fort", "⛈️"),
     }
-    desc, emoji = mapping.get(code, ("Inconnu", "\u{1F300}"))
+    desc, emoji = mapping.get(code, ("Inconnu", "🌀"))
     return {"desc": desc, "emoji": emoji}
 
 
@@ -230,8 +230,8 @@ async def recent_activity(limit: int = Query(15, ge=1, le=50), db=Depends(get_ra
     for r in rows:
         activities.append({
             "type": "task",
-            "emoji": "\u2705" if r[2] else "\u{1F4CB}",
-            "text": f"{'Termin\u00e9e' if r[2] else 'Cr\u00e9\u00e9e'} : {r[1]}",
+            "emoji": "✅" if r[2] else "📋",
+            "text": f"{'Terminée' if r[2] else 'Créée'} : {r[1]}",
             "date": r[3],
         })
 
@@ -243,8 +243,8 @@ async def recent_activity(limit: int = Query(15, ge=1, le=50), db=Depends(get_ra
     for r in rows:
         activities.append({
             "type": "planning",
-            "emoji": "\u{1F4C5}",
-            "text": f"\u00c9v\u00e9nement : {r[1]}",
+            "emoji": "📅",
+            "text": f"Événement : {r[1]}",
             "date": r[2],
         })
 
@@ -256,7 +256,7 @@ async def recent_activity(limit: int = Query(15, ge=1, le=50), db=Depends(get_ra
     for r in rows:
         activities.append({
             "type": "document",
-            "emoji": "\u{1F4C4}",
+            "emoji": "📄",
             "text": f"Document : {r[1]}",
             "date": r[2],
         })
@@ -269,7 +269,7 @@ async def recent_activity(limit: int = Query(15, ge=1, le=50), db=Depends(get_ra
     for r in rows:
         activities.append({
             "type": "changelog",
-            "emoji": "\u{1F4CB}",
+            "emoji": "📋",
             "text": f"Changelog : {r[1]}",
             "date": r[2],
         })
@@ -282,8 +282,8 @@ async def recent_activity(limit: int = Query(15, ge=1, le=50), db=Depends(get_ra
     for r in rows:
         activities.append({
             "type": "wiki",
-            "emoji": "\u{1F4D6}",
-            "text": f"Proc\u00e9dure : {r[1]}",
+            "emoji": "📖",
+            "text": f"Procédure : {r[1]}",
             "date": r[2],
         })
 

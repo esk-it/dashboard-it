@@ -29,7 +29,7 @@
     { id: 'sparkline', label: 'Activit\u00e9 hebdo', emoji: '\u{1F4C8}' },
     { id: 'donut', label: 'Cat\u00e9gories', emoji: '\u{1F369}' },
     { id: 'quicklinks', label: 'Acc\u00e8s rapides', emoji: '\u26A1' },
-    { id: 'weather', label: 'M\u00e9t\u00e9o', emoji: '\u{1F326}\uFE0F' },
+    // Weather is shown in the header, not as a widget
     { id: 'activity', label: 'Activit\u00e9 r\u00e9cente', emoji: '\u{1F553}' },
   ];
 
@@ -153,6 +153,17 @@
   }
 
   // KPI data
+  // Weather in header
+  let weatherData = null;
+
+  async function loadWeather() {
+    try {
+      const res = await fetch('http://localhost:8010/api/dashboard/weather');
+      weatherData = await res.json();
+      if (!weatherData.temperature && weatherData.temperature !== 0) weatherData = null;
+    } catch { weatherData = null; }
+  }
+
   let kpiTasks = 0;
   let kpiOverdue = 0;
   let kpiWeek = 0;
@@ -202,11 +213,14 @@
 
   function refreshAll() {
     fetchKpis();
+    loadWeather();
     if (priorityCard?.refresh) priorityCard.refresh();
     if (gaugeChart?.refresh) gaugeChart.refresh();
     if (sparklineChart?.refresh) sparklineChart.refresh();
     if (donutChart?.refresh) donutChart.refresh();
-    success('Données actualisées');
+    if (weatherCard?.refresh) weatherCard.refresh();
+    if (activityCard?.refresh) activityCard.refresh();
+    success('Donn\u00e9es actualis\u00e9es');
   }
 
   function goNewTask() {
@@ -218,6 +232,7 @@
     updateClock();
     clockTimer = setInterval(updateClock, 1000);
     fetchKpis();
+    loadWeather();
 
     // Auto-refresh
     const mins = $settings.auto_refresh_minutes || 5;
@@ -237,7 +252,17 @@
   <header class="home-header">
     <div class="header-left">
       <h1 class="greeting">{greeting}, <span class="username">{username}</span></h1>
-      <p class="date-str">{dateStr}</p>
+      <div class="date-weather-row">
+        <p class="date-str">{dateStr}</p>
+        {#if weatherData}
+          <span class="weather-inline">
+            <span class="wi-emoji">{weatherData.emoji}</span>
+            <span class="wi-temp">{Math.round(weatherData.temperature)}{'\u00b0'}C</span>
+            <span class="wi-desc">{weatherData.description}</span>
+            <span class="wi-city">— {weatherData.city}</span>
+          </span>
+        {/if}
+      </div>
     </div>
     <div class="header-right">
       <div class="clock-frame">
@@ -360,7 +385,6 @@
         {:else if wc.id === 'sparkline'}<SparklineChart bind:this={sparklineChart} />
         {:else if wc.id === 'donut'}<DonutChart bind:this={donutChart} />
         {:else if wc.id === 'quicklinks'}<QuickLinksCard />
-        {:else if wc.id === 'weather'}<WeatherCard bind:this={weatherCard} />
         {:else if wc.id === 'activity'}<ActivityCard bind:this={activityCard} />
         {/if}
       </div>
@@ -412,11 +436,30 @@
     color: var(--accent);
   }
 
+  .date-weather-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
   .date-str {
     font-size: 14px;
     color: var(--text-secondary);
     margin: 0;
   }
+  .weather-inline {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 10px;
+    padding: 4px 12px;
+  }
+  .wi-emoji { font-size: 18px; line-height: 1; }
+  .wi-temp { font-size: 14px; font-weight: 700; color: var(--text-primary); }
+  .wi-desc { font-size: 12px; color: var(--text-secondary); }
+  .wi-city { font-size: 11px; color: var(--text-muted); }
 
   .header-right {
     display: flex;
