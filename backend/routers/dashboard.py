@@ -1,10 +1,14 @@
 from __future__ import annotations
 
-from datetime import date, timedelta
+import logging
+from datetime import date, datetime, timedelta
 
+import httpx
 from fastapi import APIRouter, Depends, Query
 
 from ..database import get_raw_db
+
+logger = logging.getLogger(__name__)
 from ..schemas.dashboard import (
     CategoryStatItem,
     CompletionResponse,
@@ -125,3 +129,164 @@ async def top_tasks(limit: int = Query(5, ge=1, le=50), db=Depends(get_raw_db)):
         )
         for r in rows
     ]
+
+
+# ── Weather (free, no API key) ────────────────────────────────
+_weather_cache: dict = {}
+
+@router.get("/weather")
+async def weather():
+    """Get weather using IP geolocation + Open-Meteo (free, no API key needed)."""
+    import time
+    # Cache for 30 minutes
+    if _weather_cache.get("data") and time.time() - _weather_cache.get("ts", 0) < 1800:
+        return _weather_cache["data"]
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            # 1. Get location from IP
+            geo = await client.get("https://ipapi.co/json/")
+            geo_data = geo.json()
+            lat = geo_data.get("latitude", 48.86)
+            lon = geo_data.get("longitude", 2.35)
+            city = geo_data.get("city", "Paris")
+
+            # 2. Get weather from Open-Meteo (free, no key)
+            weather_url = (
+                f"https://api.open-meteo.com/v1/forecast?"
+                f"latitude={lat}&longitude={lon}"
+                f"&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m"
+                f"&daily=temperature_2m_max,temperature_2m_min,weather_code"
+                f"&timezone=auto&forecast_days=3"
+            )
+            resp = await client.get(weather_url)
+            data = resp.json()
+
+            current = data.get("current", {})
+            daily = data.get("daily", {})
+
+            # WMO weather codes → description + emoji
+            wmo = _wmo_code(current.get("weather_code", 0))
+
+            result = {
+                "city": city,
+                "temperature": current.get("temperature_2m"),
+                "humidity": current.get("relative_humidity_2m"),
+                "wind_speed": current.get("wind_speed_10m"),
+                "description": wmo["desc"],
+                "emoji": wmo["emoji"],
+                "forecast": [],
+            }
+
+            # 3-day forecast
+            for i in range(min(3, len(daily.get("time", [])))):
+                fc_wmo = _wmo_code(daily["weather_code"][i])
+                result["forecast"].append({
+                    "date": daily["time"][i],
+                    "temp_max": daily["temperature_2m_max"][i],
+                    "temp_min": daily["temperature_2m_min"][i],
+                    "description": fc_wmo["desc"],
+                    "emoji": fc_wmo["emoji"],
+                })
+
+            _weather_cache["data"] = result
+            _weather_cache["ts"] = time.time()
+            return result
+
+    except Exception as e:
+        logger.warning(f"Weather fetch failed: {e}")
+        return {"city": "N/A", "temperature": None, "emoji": "\u2601\uFE0F", "description": "Indisponible", "forecast": []}
+
+
+def _wmo_code(code: int) -> dict:
+    """Convert WMO weather code to description + emoji."""
+    mapping = {
+        0: ("Ciel d\u00e9gag\u00e9", "\u2600\uFE0F"), 1: ("Peu nuageux", "\u{1F324}\uFE0F"),
+        2: ("Partiellement nuageux", "\u26C5"), 3: ("Couvert", "\u2601\uFE0F"),
+        45: ("Brouillard", "\u{1F32B}\uFE0F"), 48: ("Brouillard givrant", "\u{1F32B}\uFE0F"),
+        51: ("Bruine l\u00e9g\u00e8re", "\u{1F326}\uFE0F"), 53: ("Bruine", "\u{1F326}\uFE0F"), 55: ("Bruine forte", "\u{1F327}\uFE0F"),
+        61: ("Pluie l\u00e9g\u00e8re", "\u{1F326}\uFE0F"), 63: ("Pluie", "\u{1F327}\uFE0F"), 65: ("Pluie forte", "\u{1F327}\uFE0F"),
+        71: ("Neige l\u00e9g\u00e8re", "\u{1F328}\uFE0F"), 73: ("Neige", "\u2744\uFE0F"), 75: ("Neige forte", "\u2744\uFE0F"),
+        80: ("Averses", "\u{1F326}\uFE0F"), 81: ("Averses mod\u00e9r\u00e9es", "\u{1F327}\uFE0F"), 82: ("Averses violentes", "\u{1F327}\uFE0F"),
+        85: ("Averses de neige", "\u{1F328}\uFE0F"), 86: ("Averses de neige fortes", "\u{1F328}\uFE0F"),
+        95: ("Orage", "\u26C8\uFE0F"), 96: ("Orage gr\u00eale", "\u26C8\uFE0F"), 99: ("Orage gr\u00eale fort", "\u26C8\uFE0F"),
+    }
+    desc, emoji = mapping.get(code, ("Inconnu", "\u{1F300}"))
+    return {"desc": desc, "emoji": emoji}
+
+
+# ── Recent activity feed ──────────────────────────────────────
+
+@router.get("/activity")
+async def recent_activity(limit: int = Query(15, ge=1, le=50), db=Depends(get_raw_db)):
+    """Aggregate recent actions across all modules."""
+    activities = []
+
+    # Recent tasks (created or completed)
+    rows = await db.execute_fetchall(
+        "SELECT id, title, done, created_at FROM tasks ORDER BY created_at DESC LIMIT ?",
+        (limit,),
+    )
+    for r in rows:
+        activities.append({
+            "type": "task",
+            "emoji": "\u2705" if r[2] else "\u{1F4CB}",
+            "text": f"{'Termin\u00e9e' if r[2] else 'Cr\u00e9\u00e9e'} : {r[1]}",
+            "date": r[3],
+        })
+
+    # Recent planning events
+    rows = await db.execute_fetchall(
+        "SELECT id, title, created_at FROM planning_events ORDER BY created_at DESC LIMIT ?",
+        (limit,),
+    )
+    for r in rows:
+        activities.append({
+            "type": "planning",
+            "emoji": "\u{1F4C5}",
+            "text": f"\u00c9v\u00e9nement : {r[1]}",
+            "date": r[2],
+        })
+
+    # Recent documents
+    rows = await db.execute_fetchall(
+        "SELECT id, title, created_at FROM documents ORDER BY created_at DESC LIMIT ?",
+        (limit,),
+    )
+    for r in rows:
+        activities.append({
+            "type": "document",
+            "emoji": "\u{1F4C4}",
+            "text": f"Document : {r[1]}",
+            "date": r[2],
+        })
+
+    # Recent changelog entries
+    rows = await db.execute_fetchall(
+        "SELECT id, title, created_at FROM changelog_entries ORDER BY created_at DESC LIMIT ?",
+        (limit,),
+    )
+    for r in rows:
+        activities.append({
+            "type": "changelog",
+            "emoji": "\u{1F4CB}",
+            "text": f"Changelog : {r[1]}",
+            "date": r[2],
+        })
+
+    # Recent wiki articles
+    rows = await db.execute_fetchall(
+        "SELECT id, title, updated_at FROM wiki_articles ORDER BY updated_at DESC LIMIT ?",
+        (limit,),
+    )
+    for r in rows:
+        activities.append({
+            "type": "wiki",
+            "emoji": "\u{1F4D6}",
+            "text": f"Proc\u00e9dure : {r[1]}",
+            "date": r[2],
+        })
+
+    # Sort all by date descending
+    activities.sort(key=lambda a: a.get("date") or "", reverse=True)
+    return activities[:limit]

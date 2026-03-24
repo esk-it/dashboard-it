@@ -11,6 +11,8 @@
   import SparklineChart from '../components/cards/SparklineChart.svelte';
   import DonutChart from '../components/cards/DonutChart.svelte';
   import QuickLinksCard from '../components/cards/QuickLinksCard.svelte';
+  import WeatherCard from '../components/cards/WeatherCard.svelte';
+  import ActivityCard from '../components/cards/ActivityCard.svelte';
 
   const JOURS = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
   const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'ao\u00fbt', 'septembre', 'octobre', 'novembre', 'décembre'];
@@ -27,6 +29,8 @@
     { id: 'sparkline', label: 'Activit\u00e9 hebdo', emoji: '\u{1F4C8}' },
     { id: 'donut', label: 'Cat\u00e9gories', emoji: '\u{1F369}' },
     { id: 'quicklinks', label: 'Acc\u00e8s rapides', emoji: '\u26A1' },
+    { id: 'weather', label: 'M\u00e9t\u00e9o', emoji: '\u{1F326}\uFE0F' },
+    { id: 'activity', label: 'Activit\u00e9 r\u00e9cente', emoji: '\u{1F553}' },
   ];
 
   const SIZE_LABELS = { 1: '1/3', 2: '1/2', 3: 'Pleine' };
@@ -41,7 +45,17 @@
   function loadWidgetConfig() {
     try {
       const saved = localStorage.getItem('itm-widgets-v2');
-      if (saved) { widgetConfig = JSON.parse(saved); return; }
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Merge in any new widgets not in saved config
+        for (const def of DEFAULT_CONFIG) {
+          if (!parsed.find(w => w.id === def.id)) {
+            parsed.push({ ...def, order: parsed.length });
+          }
+        }
+        widgetConfig = parsed;
+        return;
+      }
     } catch {}
     widgetConfig = [...DEFAULT_CONFIG];
   }
@@ -151,6 +165,8 @@
   let gaugeChart;
   let sparklineChart;
   let donutChart;
+  let weatherCard;
+  let activityCard;
 
   $: greeting = getGreeting();
   $: username = $settings.username || 'Utilisateur';
@@ -344,6 +360,8 @@
         {:else if wc.id === 'sparkline'}<SparklineChart bind:this={sparklineChart} />
         {:else if wc.id === 'donut'}<DonutChart bind:this={donutChart} />
         {:else if wc.id === 'quicklinks'}<QuickLinksCard />
+        {:else if wc.id === 'weather'}<WeatherCard bind:this={weatherCard} />
+        {:else if wc.id === 'activity'}<ActivityCard bind:this={activityCard} />
         {/if}
       </div>
     {/each}

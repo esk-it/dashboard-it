@@ -1,29 +1,64 @@
 <script>
+  import { onMount } from 'svelte';
   import GlassCard from '../GlassCard.svelte';
 
-  const placeholderItems = [
-    { emoji: '✅', text: 'Tâche "Mise à jour serveur" complétée', time: 'Il y a 2h' },
-    { emoji: '\u{1F4C4}', text: 'Document "Procédure VPN" ajouté', time: 'Il y a 4h' },
-    { emoji: '\u{1F5A5}\uFE0F', text: 'Nouvel équipement ajouté au parc', time: 'Hier' },
-  ];
+  let activities = [];
+  let loading = true;
+
+  export async function refresh() { await load(); }
+
+  onMount(load);
+
+  async function load() {
+    loading = true;
+    try {
+      const res = await fetch('http://localhost:8010/api/dashboard/activity?limit=10');
+      activities = await res.json();
+    } catch { activities = []; }
+    loading = false;
+  }
+
+  function timeAgo(dateStr) {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      const now = new Date();
+      const diffMs = now - d;
+      const mins = Math.floor(diffMs / 60000);
+      if (mins < 1) return "À l'instant";
+      if (mins < 60) return `Il y a ${mins} min`;
+      const hours = Math.floor(mins / 60);
+      if (hours < 24) return `Il y a ${hours}h`;
+      const days = Math.floor(hours / 24);
+      if (days === 1) return 'Hier';
+      if (days < 7) return `Il y a ${days}j`;
+      return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+    } catch { return ''; }
+  }
 </script>
 
 <GlassCard padding="0">
   <div class="card-inner">
     <div class="card-header">
-      <h3>{'\u{1F553}'} Activit&eacute; r&eacute;cente</h3>
+      <h3>{'\u{1F553}'} Activit{'\u00e9'} r{'\u00e9'}cente</h3>
     </div>
 
     <div class="activity-list">
-      {#each placeholderItems as item}
-        <div class="activity-item">
-          <span class="activity-emoji">{item.emoji}</span>
-          <div class="activity-info">
-            <span class="activity-text">{item.text}</span>
-            <span class="activity-time">{item.time}</span>
+      {#if loading}
+        <div class="activity-empty">Chargement...</div>
+      {:else if activities.length === 0}
+        <div class="activity-empty">Aucune activit{'\u00e9'} r{'\u00e9'}cente</div>
+      {:else}
+        {#each activities as item}
+          <div class="activity-item">
+            <span class="activity-emoji">{item.emoji}</span>
+            <div class="activity-info">
+              <span class="activity-text">{item.text}</span>
+              <span class="activity-time">{timeAgo(item.date)}</span>
+            </div>
           </div>
-        </div>
-      {/each}
+        {/each}
+      {/if}
     </div>
   </div>
 </GlassCard>
@@ -85,5 +120,12 @@
   .activity-time {
     font-size: 11px;
     color: var(--text-muted);
+  }
+
+  .activity-empty {
+    padding: 24px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
   }
 </style>
