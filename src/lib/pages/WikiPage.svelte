@@ -541,6 +541,7 @@
         {:else}
           <div class="articles-list">
             {#each filteredArticles.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0)) as article (article.id)}
+              {@const refParts = parseRefFromTitle(article.title)}
               <div class="article-row" on:click={() => viewArticle(article)}>
                 <div class="article-row-left">
                   {#if article.pinned}
@@ -549,7 +550,6 @@
                   {#if article.content_format === 'markdown'}
                     <span class="format-badge format-md">MD</span>
                   {/if}
-                  {@const refParts = parseRefFromTitle(article.title)}
                   {#if refParts}
                     <div class="ref-badges">
                       {#each refParts as seg}
@@ -639,10 +639,10 @@
               <h3>{'\u{1F517}'} Proc{'\u00e9'}dures li{'\u00e9'}es</h3>
               <div class="related-list">
                 {#each relatedArticles as rel}
+                  {@const rParts = parseRefFromTitle(rel.title)}
                   <!-- svelte-ignore a11y_click_events_have_key_events -->
                   <!-- svelte-ignore a11y_no_static_element_interactions -->
                   <div class="related-item" class:related-strong={rel.match === 'tool'} on:click={() => viewArticle(rel)}>
-                    {@const rParts = parseRefFromTitle(rel.title)}
                     {#if rParts}
                       <div class="ref-badges" style="margin-right:8px">
                         {#each rParts as seg}
