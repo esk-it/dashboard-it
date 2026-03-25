@@ -25,6 +25,9 @@
   let showSearch = false;
   let splashDone = false;
 
+  // Reload settings after splash is done (backend is ready by then)
+  $: if (splashDone) loadSettings();
+
   onMount(() => {
     loadSettings();
 

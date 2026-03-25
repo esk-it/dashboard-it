@@ -12,15 +12,17 @@ export const settings = writable({
 });
 
 export async function loadSettings() {
-  // Retry a few times since backend sidecar takes a moment to start
-  for (let attempt = 0; attempt < 5; attempt++) {
+  // Retry — backend sidecar takes a few seconds to start
+  for (let attempt = 0; attempt < 8; attempt++) {
     try {
       const data = await api.get('/api/settings/general');
-      settings.set(data);
-      break;
+      if (data && typeof data === 'object') {
+        settings.set(data);
+        break;
+      }
     } catch (e) {
-      if (attempt < 4) {
-        await new Promise(r => setTimeout(r, 1500));
+      if (attempt < 7) {
+        await new Promise(r => setTimeout(r, 2000));
       } else {
         console.warn('Failed to load settings after retries:', e);
       }
