@@ -118,11 +118,12 @@
   // Import
   let fileInputEl;
 
-  // Reference system
-  let refTree = null; // { tree: { domain -> { tools -> articles } }, unclassified: [] }
-  let refSegments = null; // { types, domains, tools, actions }
+  // Reference system — 4-level tree: type → domain → tool → articles
+  let refTree = null;
+  let refSegments = null;
   let relatedArticles = [];
-  let filterSegment = ''; // filter by segment code
+  let filterSegment = '';
+  let expandedTypes = {};
   let expandedDomains = {};
   let expandedTools = {};
   let showRefSidebar = true;
@@ -523,7 +524,7 @@
             {/each}
           </div>
         {:else}
-          <!-- References tree view -->
+          <!-- References tree view — 4 levels: Type → Domain → Tool → Articles -->
           <div class="ref-tree">
             {#if refTree}
               <button class="cat-item" class:cat-active={!filterSegment}
@@ -531,29 +532,64 @@
                 <span>Toutes</span>
                 <span class="cat-count">{articles.length}</span>
               </button>
-              {#each Object.entries(refTree.tree) as [domainCode, domain]}
+
+              {#each Object.entries(refTree.tree) as [typeCode, typeNode]}
                 <div class="ref-node">
-                  <button class="cat-item ref-domain"
-                    on:click={() => { expandedDomains[domainCode] = !expandedDomains[domainCode]; expandedDomains = expandedDomains; }}>
-                    <svg class="ref-chevron" class:ref-open={expandedDomains[domainCode]} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="9 18 15 12 9 6"/></svg>
-                    <span class="ref-badge-sm" style="background:{getSegmentColor(domainCode)}">{domainCode}</span>
-                    <span class="cat-name">{domain.label}</span>
-                    <span class="cat-count">{Object.values(domain.tools).reduce((s, t) => s + t.articles.length, 0)}</span>
+                  <!-- Level 1: Type (PROC, DOC, GUIDE...) -->
+                  <button class="cat-item ref-type"
+                    on:click={() => { expandedTypes[typeCode] = !expandedTypes[typeCode]; expandedTypes = expandedTypes; }}>
+                    <svg class="ref-chevron" class:ref-open={expandedTypes[typeCode]} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="9 18 15 12 9 6"/></svg>
+                    <span class="ref-badge-sm" style="background:{getSegmentColor(typeCode)}">{typeCode}</span>
+                    <span class="cat-name">{typeNode.label}</span>
+                    <span class="cat-count">{Object.values(typeNode.domains).reduce((s, d) => s + Object.values(d.tools).reduce((s2, t) => s2 + t.articles.length, 0), 0)}</span>
                   </button>
-                  {#if expandedDomains[domainCode]}
-                    {#each Object.entries(domain.tools) as [toolCode, tool]}
-                      <div class="ref-tool-node">
-                        <button class="cat-item ref-tool" class:cat-active={filterSegment === toolCode}
-                          on:click={() => { filterSegment = filterSegment === toolCode ? '' : toolCode; filterCategory = ''; }}>
-                          <span class="ref-badge-sm tool-badge" style="background:{getSegmentColor(toolCode)}">{toolCode}</span>
-                          <span class="cat-name">{tool.label}</span>
-                          <span class="cat-count">{tool.articles.length}</span>
+
+                  {#if expandedTypes[typeCode]}
+                    {#each Object.entries(typeNode.domains) as [domainCode, domainNode]}
+                      <div class="ref-domain-node">
+                        <!-- Level 2: Domain (SI, RES, SEC...) -->
+                        <button class="cat-item ref-domain"
+                          on:click={() => { expandedDomains[typeCode+domainCode] = !expandedDomains[typeCode+domainCode]; expandedDomains = expandedDomains; }}>
+                          <svg class="ref-chevron" class:ref-open={expandedDomains[typeCode+domainCode]} width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="9 18 15 12 9 6"/></svg>
+                          <span class="ref-badge-sm" style="background:{getSegmentColor(domainCode)}">{domainCode}</span>
+                          <span class="cat-name">{domainNode.label}</span>
+                          <span class="cat-count">{Object.values(domainNode.tools).reduce((s, t) => s + t.articles.length, 0)}</span>
                         </button>
+
+                        {#if expandedDomains[typeCode+domainCode]}
+                          {#each Object.entries(domainNode.tools) as [toolCode, toolNode]}
+                            <div class="ref-tool-node">
+                              <!-- Level 3: Tool (NGINX, GLPI...) -->
+                              <button class="cat-item ref-tool"
+                                on:click={() => { expandedTools[typeCode+domainCode+toolCode] = !expandedTools[typeCode+domainCode+toolCode]; expandedTools = expandedTools; }}>
+                                <svg class="ref-chevron" class:ref-open={expandedTools[typeCode+domainCode+toolCode]} width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="9 18 15 12 9 6"/></svg>
+                                <span class="ref-badge-sm tool-badge" style="background:{getSegmentColor(toolCode)}">{toolCode}</span>
+                                <span class="cat-name">{toolNode.label}</span>
+                                <span class="cat-count">{toolNode.articles.length}</span>
+                              </button>
+
+                              {#if expandedTools[typeCode+domainCode+toolCode]}
+                                {#each toolNode.articles as art}
+                                  <!-- Level 4: Article (action) -->
+                                  <!-- svelte-ignore a11y_click_events_have_key_events -->
+                                  <!-- svelte-ignore a11y_no_static_element_interactions -->
+                                  <div class="ref-article-item" on:click={() => viewArticle(art)}>
+                                    {#if art.action_code}
+                                      <span class="ref-badge-xs" style="background:{getSegmentColor(art.action_code)}">{art.action_code}</span>
+                                    {/if}
+                                    <span class="ref-article-title">{art.clean_title || art.title}</span>
+                                  </div>
+                                {/each}
+                              {/if}
+                            </div>
+                          {/each}
+                        {/if}
                       </div>
                     {/each}
                   {/if}
                 </div>
               {/each}
+
               {#if refTree.unclassified.length > 0}
                 <button class="cat-item" class:cat-active={filterSegment === '_none'}
                   on:click={() => { filterSegment = filterSegment === '_none' ? '' : '_none'; filterCategory = ''; }}>
@@ -1865,7 +1901,24 @@
   .ref-domain { font-weight: 600; }
   .ref-chevron { transition: transform 0.2s; flex-shrink: 0; color: var(--text-muted); }
   .ref-chevron.ref-open { transform: rotate(90deg); }
-  .ref-tool-node { margin-left: 18px; padding-left: 8px; border-left: 1px solid rgba(255,255,255,0.06); }
+  .ref-type { font-weight: 600; }
+  .ref-domain-node { margin-left: 14px; padding-left: 8px; border-left: 1px solid rgba(255,255,255,0.06); }
+  .ref-tool-node { margin-left: 14px; padding-left: 8px; border-left: 1px solid rgba(255,255,255,0.06); }
+  .ref-article-item {
+    display: flex; align-items: center; gap: 6px;
+    margin-left: 14px; padding: 5px 8px 5px 16px;
+    border-left: 1px solid rgba(255,255,255,0.04);
+    cursor: pointer; border-radius: 6px; transition: background 0.15s;
+    font-size: 0.78rem; color: var(--text-secondary);
+  }
+  .ref-article-item:hover { background: rgba(255,255,255,0.05); color: var(--text-primary); }
+  .ref-article-title {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;
+  }
+  .ref-badge-xs {
+    font-size: 0.6rem; font-weight: 700; padding: 1px 5px;
+    border-radius: 4px; color: #fff; flex-shrink: 0; opacity: 0.85;
+  }
 
   /* Reference badges */
   .ref-badges { display: flex; gap: 3px; flex-shrink: 0; }

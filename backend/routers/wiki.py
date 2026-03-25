@@ -102,28 +102,51 @@ def _parse_ref(title: str) -> dict | None:
 # ── Reference endpoints (MUST be before /{article_id}) ────────
 @router.get("/references/tree")
 async def reference_tree(db=Depends(get_raw_db)):
+    """Build a 4-level tree: Type → Domain → Tool → Articles (with action label)."""
     rows = await db.execute_fetchall(
         "SELECT id, title, COALESCE(category,''), COALESCE(tags,''), COALESCE(updated_at,'') FROM wiki_articles ORDER BY title"
     )
+    # tree structure: { type_code: { label, domains: { domain_code: { label, tools: { tool_code: { label, articles: [] } } } } } }
     tree: dict = {}
     no_ref = []
+
     for r in rows:
         article = {"id": r[0], "title": r[1], "category": r[2], "tags": r[3], "updated_at": r[4]}
         parsed = _parse_ref(r[1])
+
         if parsed and len(parsed["segments"]) >= 3:
-            domain = parsed["segments"][1]["code"]
-            tool = parsed["segments"][2]["code"]
+            segs = parsed["segments"]
+            type_code = segs[0]["code"]
+            domain_code = segs[1]["code"]
+            tool_code = segs[2]["code"]
+            # Action is segment[3] if exists, otherwise empty
+            action_code = segs[3]["code"] if len(segs) >= 4 else ""
+            action_label = segs[3]["label"] if len(segs) >= 4 else ""
+
             article["ref"] = parsed["ref"]
-            article["segments"] = parsed["segments"]
-            if domain not in tree:
-                tree[domain] = {"label": parsed["segments"][1]["label"], "tools": {}}
-            if tool not in tree[domain]["tools"]:
-                tree[domain]["tools"][tool] = {"label": parsed["segments"][2]["label"], "articles": []}
-            tree[domain]["tools"][tool]["articles"].append(article)
+            article["segments"] = segs
+            article["action_code"] = action_code
+            article["action_label"] = action_label
+            # Strip reference from title for clean display
+            clean_title = r[1][len(parsed["ref"]):].lstrip(" -–—")
+            article["clean_title"] = clean_title or r[1]
+
+            # Build nested tree
+            if type_code not in tree:
+                tree[type_code] = {"label": segs[0]["label"], "domains": {}}
+            domains = tree[type_code]["domains"]
+            if domain_code not in domains:
+                domains[domain_code] = {"label": segs[1]["label"], "tools": {}}
+            tools = domains[domain_code]["tools"]
+            if tool_code not in tools:
+                tools[tool_code] = {"label": segs[2]["label"], "articles": []}
+            tools[tool_code]["articles"].append(article)
         else:
             article["ref"] = parsed["ref"] if parsed else None
             article["segments"] = parsed["segments"] if parsed else []
+            article["clean_title"] = r[1]
             no_ref.append(article)
+
     return {"tree": tree, "unclassified": no_ref}
 
 
