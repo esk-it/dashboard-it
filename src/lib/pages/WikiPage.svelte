@@ -134,6 +134,53 @@
   let refAction = '';
   $: generatedRef = [refType, refDomain, refTool, refAction].filter(Boolean).join('-');
 
+  // Known types, domains, actions for reference parsing
+  const KNOWN_TYPES = ['PROC', 'DOC', 'GUIDE', 'NOTE', 'OLD'];
+  const KNOWN_DOMAINS = ['SI', 'RES', 'SEC', 'PED', 'ADM', 'TEL'];
+  const KNOWN_ACTIONS = [
+    'INST', 'CONF', 'MAJ', 'DIAG', 'DEPL', 'SAV', 'REST', 'MIGR', 'SECU',
+    'UTIL', 'BACKUP', 'FORM', 'CUST', 'GIT', 'HTTPS', 'SYNC', 'UPDATE',
+    'INVENTORY', 'LDAP', 'MAIL', 'MAINT', 'RESET', 'TEST', 'AUDIT',
+  ];
+
+  function autoFillRefFromCode(refCode) {
+    // Parse a reference like "PROC-SI-NGINX-INST" or "OLD-PROC-SI-GLPI-BACKUP"
+    const parts = refCode.split('-').filter(Boolean);
+    let idx = 0;
+
+    // Skip OLD prefix
+    if (parts[idx] === 'OLD') idx++;
+
+    // Type
+    if (idx < parts.length && KNOWN_TYPES.includes(parts[idx])) {
+      refType = parts[idx];
+      idx++;
+    }
+
+    // Domain
+    if (idx < parts.length && KNOWN_DOMAINS.includes(parts[idx])) {
+      refDomain = parts[idx];
+      idx++;
+    }
+
+    // Tool (everything between domain and action)
+    // The last part might be an action, everything else is the tool
+    const remaining = parts.slice(idx);
+    if (remaining.length > 0) {
+      const lastPart = remaining[remaining.length - 1];
+      if (KNOWN_ACTIONS.includes(lastPart) && remaining.length > 1) {
+        refAction = lastPart;
+        refTool = remaining.slice(0, -1).join('-');
+      } else if (KNOWN_ACTIONS.includes(lastPart)) {
+        refAction = lastPart;
+        refTool = '';
+      } else {
+        refTool = remaining.join('-');
+        refAction = '';
+      }
+    }
+  }
+
   async function loadRefTree() {
     try {
       const [tree, segs] = await Promise.all([
@@ -317,6 +364,7 @@
   function openCreateDialog() {
     editingArticle = null;
     form = defaultForm();
+    refType = 'PROC'; refDomain = ''; refTool = ''; refAction = '';
     if (filterCategory) form.category = filterCategory;
     showDialog = true;
   }
@@ -331,6 +379,12 @@
       pinned: article.pinned || false,
       content_format: article.content_format || 'html',
     };
+    // Auto-fill reference generator from title
+    const ref = parseRefFromTitle(article.title);
+    if (ref) {
+      const refCode = article.title.match(/^([A-Z0-9-]+)/)?.[1];
+      if (refCode) autoFillRefFromCode(refCode);
+    }
     showDialog = true;
   }
 
@@ -355,7 +409,7 @@
       // ── 1. Extract reference + title from filename pattern "REF - Titre" ──
       let reference = '';
       let title = baseName;
-      const filenameMatch = baseName.match(/^(PROC[-\w]+)\s*[-–—]\s*(.+)$/);
+      const filenameMatch = baseName.match(/^((?:OLD-)?(?:PROC|DOC|GUIDE|NOTE)[-\w]+)\s*[-–—]\s*(.+)$/);
       if (filenameMatch) {
         reference = filenameMatch[1].trim();          // ex: "PROC-SI-GLPI-FORM"
         title = filenameMatch[2].trim();              // ex: "Formulaire de support informatique"
@@ -380,7 +434,7 @@
 
       // ── 4. Extract reference from blockquote if not found in filename ──
       if (!reference) {
-        const refMatch = content.match(/\*\*Référence\*\*\s*:\s*(PROC[-\w]+)/);
+        const refMatch = content.match(/\*\*Référence\*\*\s*:\s*((?:OLD-)?(?:PROC|DOC|GUIDE|NOTE)[-\w]+)/);
         if (refMatch) {
           reference = refMatch[1].trim();
         }
@@ -392,7 +446,7 @@
       // Pre-fill the dialog
       editingArticle = null;
       form = {
-        title,
+        title: reference ? reference + ' - ' + title : title,
         category: 'Procédure',
         content,
         tags,
@@ -400,6 +454,12 @@
         content_format: 'markdown',
         source_path: file.name,
       };
+
+      // Auto-fill reference generator from parsed reference
+      if (reference) {
+        autoFillRefFromCode(reference);
+      }
+
       showDialog = true;
       success('Fichier importé — vérifiez et validez');
     } catch (err) {
@@ -694,7 +754,6 @@
       </div>
       <div class="modal-body">
         <!-- Reference generator -->
-        {#if !editingArticle}
           <div class="ref-generator">
             <span class="ref-gen-label">{'\u{1F3F7}\uFE0F'} R{'\u00e9'}f{'\u00e9'}rence :</span>
             <select class="ref-gen-select" bind:value={refType}>
@@ -706,29 +765,44 @@
             </select>
             <select class="ref-gen-select" bind:value={refDomain}>
               <option value="">Domaine</option>
+              <option value="SI">SI (Syst. Info)</option>
+              <option value="RES">RES (R{'\u00e9'}seau)</option>
+              <option value="SEC">SEC (S{'\u00e9'}curit{'\u00e9'})</option>
+              <option value="PED">PED (P{'\u00e9'}dagogique)</option>
+              <option value="ADM">ADM (Administration)</option>
+              <option value="TEL">TEL (T{'\u00e9'}l{'\u00e9'}phonie)</option>
               {#if refSegments}
-                {#each refSegments.domains as d}
+                {#each refSegments.domains.filter(d => !['SI','RES','SEC','PED','ADM','TEL'].includes(d.code)) as d}
                   <option value={d.code}>{d.code} ({d.label})</option>
                 {/each}
               {/if}
-              <option value="SI">SI</option>
-              <option value="RES">RES</option>
-              <option value="SEC">SEC</option>
-              <option value="PED">PED</option>
-              <option value="ADM">ADM</option>
             </select>
-            <input type="text" class="ref-gen-input" bind:value={refTool} placeholder="Outil (ex: NGINX)" style="width:100px;text-transform:uppercase" />
+            <input type="text" class="ref-gen-input" bind:value={refTool} placeholder="OUTIL (EX: NGINX)" style="width:120px;text-transform:uppercase" />
             <select class="ref-gen-select" bind:value={refAction}>
               <option value="">Action</option>
               <option value="INST">INST (Installation)</option>
               <option value="CONF">CONF (Configuration)</option>
               <option value="MAJ">MAJ (Mise {'\u00e0'} jour)</option>
+              <option value="UPDATE">UPDATE (Mise {'\u00e0'} jour)</option>
+              <option value="BACKUP">BACKUP (Sauvegarde)</option>
+              <option value="REST">REST (Restauration)</option>
+              <option value="UTIL">UTIL (Utilisation)</option>
+              <option value="FORM">FORM (Formulaire)</option>
+              <option value="CUST">CUST (Personnalisation)</option>
+              <option value="GIT">GIT (Gestion Git)</option>
+              <option value="HTTPS">HTTPS (Certificats/SSL)</option>
+              <option value="SYNC">SYNC (Synchronisation)</option>
+              <option value="LDAP">LDAP (Annuaire)</option>
+              <option value="MAIL">MAIL (Messagerie)</option>
+              <option value="INVENTORY">INVENTORY (Inventaire)</option>
               <option value="DIAG">DIAG (Diagnostic)</option>
               <option value="DEPL">DEPL (D{'\u00e9'}ploiement)</option>
-              <option value="SAV">SAV (Sauvegarde)</option>
-              <option value="REST">REST (Restauration)</option>
               <option value="MIGR">MIGR (Migration)</option>
               <option value="SECU">SECU (S{'\u00e9'}curisation)</option>
+              <option value="MAINT">MAINT (Maintenance)</option>
+              <option value="RESET">RESET (R{'\u00e9'}initialisation)</option>
+              <option value="TEST">TEST (Test/Validation)</option>
+              <option value="AUDIT">AUDIT (Audit)</option>
             </select>
             {#if generatedRef.includes('-')}
               <button class="ref-gen-apply" on:click={() => { form.title = generatedRef + ' - ' + form.title.replace(/^[A-Z0-9-]+ ?- ?/, ''); }}>
@@ -736,7 +810,6 @@
               </button>
             {/if}
           </div>
-        {/if}
 
         <label class="form-label">
           Titre *
