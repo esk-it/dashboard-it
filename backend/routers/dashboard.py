@@ -136,18 +136,26 @@ _weather_cache: dict = {}
 
 @router.get("/weather")
 async def weather():
-    """Get weather using IP geolocation + Open-Meteo (free, no API key needed)."""
+    """Get weather using configured city or IP geolocation + Open-Meteo (free, no API key needed)."""
     import time
-    # Cache for 30 minutes
-    if _weather_cache.get("data") and time.time() - _weather_cache.get("ts", 0) < 1800:
+
+    # Check configured city
+    from .settings import GENERAL_FILE, GENERAL_DEFAULTS, _ensure_file, _read_json
+    settings_path = _ensure_file(GENERAL_FILE, "general_settings.json", GENERAL_DEFAULTS)
+    settings = _read_json(settings_path)
+    configured_city = (settings.get("weather_city") or "").strip()
+
+    # Invalidate cache if city changed or cache is older than 30 min
+    cached_city = _weather_cache.get("city", "")
+    cache_valid = (
+        _weather_cache.get("data")
+        and time.time() - _weather_cache.get("ts", 0) < 1800
+        and cached_city == configured_city
+    )
+    if cache_valid:
         return _weather_cache["data"]
 
     try:
-        # Check if user configured a city in settings
-        from .settings import GENERAL_FILE, GENERAL_DEFAULTS, _ensure_file, _read_json
-        settings_path = _ensure_file(GENERAL_FILE, "general_settings.json", GENERAL_DEFAULTS)
-        settings = _read_json(settings_path)
-        configured_city = (settings.get("weather_city") or "").strip()
 
         async with httpx.AsyncClient(timeout=10) as client:
             if configured_city:
@@ -209,6 +217,7 @@ async def weather():
 
             _weather_cache["data"] = result
             _weather_cache["ts"] = time.time()
+            _weather_cache["city"] = configured_city
             return result
 
     except Exception as e:

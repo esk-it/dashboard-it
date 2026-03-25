@@ -12,11 +12,19 @@ export const settings = writable({
 });
 
 export async function loadSettings() {
-  try {
-    const data = await api.get('/api/settings/general');
-    settings.set(data);
-  } catch (e) {
-    console.warn('Failed to load settings:', e);
+  // Retry a few times since backend sidecar takes a moment to start
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      const data = await api.get('/api/settings/general');
+      settings.set(data);
+      break;
+    } catch (e) {
+      if (attempt < 4) {
+        await new Promise(r => setTimeout(r, 1500));
+      } else {
+        console.warn('Failed to load settings after retries:', e);
+      }
+    }
   }
 
   // Apply saved theme on startup
