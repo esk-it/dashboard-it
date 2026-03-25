@@ -118,9 +118,65 @@
   // Import
   let fileInputEl;
 
+  // Reference system
+  let refTree = null; // { tree: { domain -> { tools -> articles } }, unclassified: [] }
+  let refSegments = null; // { types, domains, tools, actions }
+  let relatedArticles = [];
+  let filterSegment = ''; // filter by segment code
+  let expandedDomains = {};
+  let expandedTools = {};
+  let showRefSidebar = true;
+
+  // Reference generator for new articles
+  let refType = 'PROC';
+  let refDomain = '';
+  let refTool = '';
+  let refAction = '';
+  $: generatedRef = [refType, refDomain, refTool, refAction].filter(Boolean).join('-');
+
+  async function loadRefTree() {
+    try {
+      const [tree, segs] = await Promise.all([
+        api.get('/api/wiki/references/tree'),
+        api.get('/api/wiki/references/segments'),
+      ]);
+      refTree = tree;
+      refSegments = segs;
+    } catch { /* ignore if backend not ready */ }
+  }
+
+  async function loadRelated(articleId) {
+    try {
+      relatedArticles = await api.get(`/api/wiki/${articleId}/related`);
+    } catch { relatedArticles = []; }
+  }
+
+  function parseRefFromTitle(title) {
+    const m = title.match(/^([A-Z0-9]+-[A-Z0-9]+(?:-[A-Z0-9]+)*)/);
+    if (!m) return null;
+    return m[1].split('-');
+  }
+
+  function getSegmentColor(code) {
+    const colors = {
+      PROC: '#6C63FF', DOC: '#22C55E', GUIDE: '#F59E0B', FORM: '#EC4899', NOTE: '#64748B',
+      SI: '#3B82F6', RES: '#8B5CF6', SEC: '#EF4444', PED: '#22C55E', ADM: '#F97316',
+      TEL: '#06A6C9', IMP: '#D97706', SRV: '#7C3AED',
+      INST: '#10B981', CONF: '#6366F1', MAJ: '#F59E0B', DIAG: '#EF4444',
+      DEPL: '#8B5CF6', SAV: '#22D3EE', REST: '#EC4899', MIGR: '#F97316',
+    };
+    return colors[code] || '#64748B';
+  }
+
   // ── Derived ────────────────────────────────────────────
   $: filteredArticles = articles.filter(a => {
     if (filterCategory && a.category !== filterCategory) return false;
+    // Segment filter
+    if (filterSegment === '_none') {
+      if (/^[A-Z0-9]+-[A-Z0-9]+/.test(a.title)) return false;
+    } else if (filterSegment) {
+      if (!(a.title || '').toUpperCase().includes(filterSegment)) return false;
+    }
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       return (a.title || '').toLowerCase().includes(q)
@@ -184,8 +240,10 @@
   async function viewArticle(article) {
     articleLoading = true;
     viewMode = 'article';
+    relatedArticles = [];
     try {
       selectedArticle = await api.get(`/api/wiki/${article.id}`);
+      loadRelated(article.id);
     } catch (e) {
       toastError('Erreur lors du chargement de l\'article');
       selectedArticle = article;
@@ -197,6 +255,7 @@
   function backToList() {
     viewMode = 'list';
     selectedArticle = null;
+    relatedArticles = [];
   }
 
   async function togglePin(article) {
@@ -363,6 +422,7 @@
   onMount(() => {
     fetchArticles();
     fetchCategories();
+    loadRefTree();
   });
 
   onDestroy(() => {
@@ -375,30 +435,77 @@
     <div class="wiki-layout">
       <!-- ── Sidebar: Categories ──────────────────────── -->
       <aside class="categories-panel">
-        <div class="categories-header">
-          <h3>📂 Catégories</h3>
-        </div>
-        <div class="categories-list">
-          <button
-            class="cat-item"
-            class:cat-active={filterCategory === ''}
-            on:click={() => filterCategory = ''}
-          >
-            <span>Toutes</span>
-            <span class="cat-count">{articles.length}</span>
+        <!-- Sidebar tabs -->
+        <div class="sidebar-tabs">
+          <button class="stab" class:stab-active={showRefSidebar === false} on:click={() => showRefSidebar = false}>
+            {'\u{1F4C2}'} Cat{'\u00e9'}gories
           </button>
-          {#each categories as cat}
-            <button
-              class="cat-item"
-              class:cat-active={filterCategory === cat.name}
-              on:click={() => filterCategory = cat.name}
-            >
-              <span class="cat-dot" style="background: {cat.color_hex || getCategoryColor(cat.name)}"></span>
-              <span class="cat-name">{cat.name}</span>
-              <span class="cat-count">{articles.filter(a => a.category === cat.name).length}</span>
-            </button>
-          {/each}
+          <button class="stab" class:stab-active={showRefSidebar === true} on:click={() => showRefSidebar = true}>
+            {'\u{1F3F7}\uFE0F'} R{'\u00e9'}f{'\u00e9'}rences
+          </button>
         </div>
+
+        {#if !showRefSidebar}
+          <!-- Categories view -->
+          <div class="categories-list">
+            <button class="cat-item" class:cat-active={filterCategory === '' && !filterSegment}
+              on:click={() => { filterCategory = ''; filterSegment = ''; }}>
+              <span>Toutes</span>
+              <span class="cat-count">{articles.length}</span>
+            </button>
+            {#each categories as cat}
+              <button class="cat-item" class:cat-active={filterCategory === cat.name}
+                on:click={() => { filterCategory = cat.name; filterSegment = ''; }}>
+                <span class="cat-dot" style="background: {cat.color_hex || getCategoryColor(cat.name)}"></span>
+                <span class="cat-name">{cat.name}</span>
+                <span class="cat-count">{articles.filter(a => a.category === cat.name).length}</span>
+              </button>
+            {/each}
+          </div>
+        {:else}
+          <!-- References tree view -->
+          <div class="ref-tree">
+            {#if refTree}
+              <button class="cat-item" class:cat-active={!filterSegment}
+                on:click={() => { filterSegment = ''; filterCategory = ''; }}>
+                <span>Toutes</span>
+                <span class="cat-count">{articles.length}</span>
+              </button>
+              {#each Object.entries(refTree.tree) as [domainCode, domain]}
+                <div class="ref-node">
+                  <button class="cat-item ref-domain"
+                    on:click={() => { expandedDomains[domainCode] = !expandedDomains[domainCode]; expandedDomains = expandedDomains; }}>
+                    <svg class="ref-chevron" class:ref-open={expandedDomains[domainCode]} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="9 18 15 12 9 6"/></svg>
+                    <span class="ref-badge-sm" style="background:{getSegmentColor(domainCode)}">{domainCode}</span>
+                    <span class="cat-name">{domain.label}</span>
+                    <span class="cat-count">{Object.values(domain.tools).reduce((s, t) => s + t.articles.length, 0)}</span>
+                  </button>
+                  {#if expandedDomains[domainCode]}
+                    {#each Object.entries(domain.tools) as [toolCode, tool]}
+                      <div class="ref-tool-node">
+                        <button class="cat-item ref-tool" class:cat-active={filterSegment === toolCode}
+                          on:click={() => { filterSegment = filterSegment === toolCode ? '' : toolCode; filterCategory = ''; }}>
+                          <span class="ref-badge-sm tool-badge" style="background:{getSegmentColor(toolCode)}">{toolCode}</span>
+                          <span class="cat-name">{tool.label}</span>
+                          <span class="cat-count">{tool.articles.length}</span>
+                        </button>
+                      </div>
+                    {/each}
+                  {/if}
+                </div>
+              {/each}
+              {#if refTree.unclassified.length > 0}
+                <button class="cat-item" class:cat-active={filterSegment === '_none'}
+                  on:click={() => { filterSegment = filterSegment === '_none' ? '' : '_none'; filterCategory = ''; }}>
+                  <span class="cat-name">{'\u{1F4C4}'} Sans r{'\u00e9'}f{'\u00e9'}rence</span>
+                  <span class="cat-count">{refTree.unclassified.length}</span>
+                </button>
+              {/if}
+            {:else}
+              <p style="padding:12px;color:var(--text-muted);font-size:0.8rem">Chargement...</p>
+            {/if}
+          </div>
+        {/if}
       </aside>
 
       <!-- ── Main: Articles ───────────────────────────── -->
@@ -442,7 +549,15 @@
                   {#if article.content_format === 'markdown'}
                     <span class="format-badge format-md">MD</span>
                   {/if}
-                  <h3 class="article-row-title">{article.title}</h3>
+                  {@const refParts = parseRefFromTitle(article.title)}
+                  {#if refParts}
+                    <div class="ref-badges">
+                      {#each refParts as seg}
+                        <span class="ref-badge-sm" style="background:{getSegmentColor(seg)}">{seg}</span>
+                      {/each}
+                    </div>
+                  {/if}
+                  <h3 class="article-row-title">{refParts ? article.title.replace(/^[A-Z0-9-]+ ?(- )?/, '') : article.title}</h3>
                 </div>
                 <div class="article-row-meta">
                   {#if article.category}
@@ -517,6 +632,31 @@
           <div class="article-content" class:kreisker-content={selectedArticle.content_format === 'markdown'}>
             {@html renderedContent || '<p style="color: var(--text-muted)">Aucun contenu</p>'}
           </div>
+
+          <!-- Related procedures -->
+          {#if relatedArticles.length > 0}
+            <div class="related-section">
+              <h3>{'\u{1F517}'} Proc{'\u00e9'}dures li{'\u00e9'}es</h3>
+              <div class="related-list">
+                {#each relatedArticles as rel}
+                  <!-- svelte-ignore a11y_click_events_have_key_events -->
+                  <!-- svelte-ignore a11y_no_static_element_interactions -->
+                  <div class="related-item" class:related-strong={rel.match === 'tool'} on:click={() => viewArticle(rel)}>
+                    {@const rParts = parseRefFromTitle(rel.title)}
+                    {#if rParts}
+                      <div class="ref-badges" style="margin-right:8px">
+                        {#each rParts as seg}
+                          <span class="ref-badge-sm" style="background:{getSegmentColor(seg)}">{seg}</span>
+                        {/each}
+                      </div>
+                    {/if}
+                    <span class="related-title">{rParts ? rel.title.replace(/^[A-Z0-9-]+ ?(- )?/, '') : rel.title}</span>
+                    <span class="related-match">{rel.match === 'tool' ? 'M\u00eame outil' : 'M\u00eame domaine'}</span>
+                  </div>
+                {/each}
+              </div>
+            </div>
+          {/if}
         </div>
       {/if}
     </div>
@@ -553,9 +693,54 @@
         <button class="modal-close" on:click={closeDialog}>✕</button>
       </div>
       <div class="modal-body">
+        <!-- Reference generator -->
+        {#if !editingArticle}
+          <div class="ref-generator">
+            <span class="ref-gen-label">{'\u{1F3F7}\uFE0F'} R{'\u00e9'}f{'\u00e9'}rence :</span>
+            <select class="ref-gen-select" bind:value={refType}>
+              <option value="">—</option>
+              <option value="PROC">PROC</option>
+              <option value="DOC">DOC</option>
+              <option value="GUIDE">GUIDE</option>
+              <option value="NOTE">NOTE</option>
+            </select>
+            <select class="ref-gen-select" bind:value={refDomain}>
+              <option value="">Domaine</option>
+              {#if refSegments}
+                {#each refSegments.domains as d}
+                  <option value={d.code}>{d.code} ({d.label})</option>
+                {/each}
+              {/if}
+              <option value="SI">SI</option>
+              <option value="RES">RES</option>
+              <option value="SEC">SEC</option>
+              <option value="PED">PED</option>
+              <option value="ADM">ADM</option>
+            </select>
+            <input type="text" class="ref-gen-input" bind:value={refTool} placeholder="Outil (ex: NGINX)" style="width:100px;text-transform:uppercase" />
+            <select class="ref-gen-select" bind:value={refAction}>
+              <option value="">Action</option>
+              <option value="INST">INST (Installation)</option>
+              <option value="CONF">CONF (Configuration)</option>
+              <option value="MAJ">MAJ (Mise {'\u00e0'} jour)</option>
+              <option value="DIAG">DIAG (Diagnostic)</option>
+              <option value="DEPL">DEPL (D{'\u00e9'}ploiement)</option>
+              <option value="SAV">SAV (Sauvegarde)</option>
+              <option value="REST">REST (Restauration)</option>
+              <option value="MIGR">MIGR (Migration)</option>
+              <option value="SECU">SECU (S{'\u00e9'}curisation)</option>
+            </select>
+            {#if generatedRef.includes('-')}
+              <button class="ref-gen-apply" on:click={() => { form.title = generatedRef + ' - ' + form.title.replace(/^[A-Z0-9-]+ ?- ?/, ''); }}>
+                Appliquer {generatedRef}
+              </button>
+            {/if}
+          </div>
+        {/if}
+
         <label class="form-label">
           Titre *
-          <input type="text" class="form-input" bind:value={form.title} placeholder="Titre de l'article" />
+          <input type="text" class="form-input" bind:value={form.title} placeholder="PROC-SI-NGINX-INST - Installation de Nginx" />
         </label>
 
         <div class="form-row">
@@ -1590,4 +1775,77 @@
     width: 1px; height: 18px; background: rgba(255,255,255,0.1);
     margin: 0 4px;
   }
+
+  /* ── Sidebar tabs ───────────────────────────────────────── */
+  .sidebar-tabs { display: flex; gap: 2px; padding: 0 0 8px; border-bottom: 1px solid rgba(255,255,255,0.06); margin-bottom: 8px; }
+  .stab {
+    flex: 1; background: none; border: none; color: var(--text-muted);
+    font-size: 0.72rem; padding: 6px 4px; cursor: pointer; border-radius: 6px;
+    font-family: inherit; transition: all 0.15s; text-align: center;
+  }
+  .stab:hover { background: rgba(255,255,255,0.04); color: var(--text-secondary); }
+  .stab.stab-active { background: rgba(var(--accent-rgb),0.12); color: var(--accent); font-weight: 600; }
+
+  /* ── Reference tree ─────────────────────────────────────── */
+  .ref-tree { display: flex; flex-direction: column; gap: 2px; }
+  .ref-node { }
+  .ref-domain { font-weight: 600; }
+  .ref-chevron { transition: transform 0.2s; flex-shrink: 0; color: var(--text-muted); }
+  .ref-chevron.ref-open { transform: rotate(90deg); }
+  .ref-tool-node { margin-left: 18px; padding-left: 8px; border-left: 1px solid rgba(255,255,255,0.06); }
+
+  /* Reference badges */
+  .ref-badges { display: flex; gap: 3px; flex-shrink: 0; }
+  .ref-badge-sm {
+    font-size: 0.62rem; font-weight: 700; color: #fff;
+    padding: 1px 6px; border-radius: 4px; line-height: 1.4;
+    letter-spacing: 0.3px; white-space: nowrap;
+  }
+  .tool-badge { opacity: 0.8; }
+
+  /* ── Related procedures ─────────────────────────────────── */
+  .related-section {
+    margin-top: 24px; padding-top: 20px;
+    border-top: 1px solid var(--border-subtle);
+  }
+  .related-section h3 { font-size: 1rem; font-weight: 600; color: var(--text-primary); margin: 0 0 12px; }
+  .related-list { display: flex; flex-direction: column; gap: 6px; }
+  .related-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px; border-radius: 8px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.05);
+    cursor: pointer; transition: all 0.15s;
+  }
+  .related-item:hover { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1); }
+  .related-item.related-strong { border-left: 3px solid var(--accent); }
+  .related-title { flex: 1; font-size: 0.85rem; color: var(--text-primary); }
+  .related-match { font-size: 0.7rem; color: var(--text-muted); white-space: nowrap; }
+
+  /* ── Reference generator ────────────────────────────────── */
+  .ref-generator {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    padding: 10px 14px; margin-bottom: 8px;
+    background: rgba(108,99,255,0.05);
+    border: 1px solid rgba(108,99,255,0.1);
+    border-radius: 10px;
+  }
+  .ref-gen-label { font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
+  .ref-gen-select {
+    padding: 4px 8px; background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1); border-radius: 6px;
+    color: var(--text-primary); font-size: 0.78rem; font-family: inherit;
+  }
+  .ref-gen-select option { background: #1e1e2e; }
+  .ref-gen-input {
+    padding: 4px 8px; background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1); border-radius: 6px;
+    color: var(--text-primary); font-size: 0.78rem; font-family: inherit;
+  }
+  .ref-gen-apply {
+    padding: 4px 12px; background: var(--accent); color: #fff;
+    border: none; border-radius: 6px; font-size: 0.75rem; font-weight: 600;
+    cursor: pointer; font-family: inherit;
+  }
+  .ref-gen-apply:hover { filter: brightness(1.15); }
 </style>

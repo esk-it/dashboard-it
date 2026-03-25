@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+from collections import defaultdict
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -146,3 +148,143 @@ async def delete_article(article_id: int, db=Depends(get_raw_db)):
 
     await db.execute("DELETE FROM wiki_articles WHERE id = ?", (article_id,))
     await db.commit()
+
+
+# ── Reference parsing ─────────────────────────────────────────
+
+# Known segment labels (auto-enriched from data)
+SEGMENT_LABELS = {
+    # Types
+    "PROC": "Procédure", "DOC": "Documentation", "GUIDE": "Guide", "FORM": "Formulaire", "NOTE": "Note",
+    # Domains
+    "SI": "Système d'Info", "RES": "Réseau", "SEC": "Sécurité", "PED": "Pédagogique",
+    "ADM": "Administration", "TEL": "Téléphonie", "IMP": "Impression", "SRV": "Serveurs",
+    # Actions
+    "INST": "Installation", "CONF": "Configuration", "MAJ": "Mise à jour", "DIAG": "Diagnostic",
+    "DEPL": "Déploiement", "SAV": "Sauvegarde", "REST": "Restauration", "SUPP": "Support",
+    "CREA": "Création", "MIGR": "Migration", "SECU": "Sécurisation",
+}
+
+REF_PATTERN = re.compile(r'^([A-Z0-9]+-[A-Z0-9]+(?:-[A-Z0-9]+)*)')
+
+
+def _parse_ref(title: str) -> dict | None:
+    """Parse a reference like PROC-SI-NGINX-INST from a title."""
+    m = REF_PATTERN.match(title.strip())
+    if not m:
+        return None
+    ref = m.group(1)
+    parts = ref.split("-")
+    if len(parts) < 2:
+        return None
+
+    segments = []
+    for p in parts:
+        label = SEGMENT_LABELS.get(p, p)
+        segments.append({"code": p, "label": label})
+
+    return {"ref": ref, "segments": segments}
+
+
+@router.get("/references/tree")
+async def reference_tree(db=Depends(get_raw_db)):
+    """Build a tree of articles grouped by reference segments."""
+    rows = await db.execute_fetchall(
+        "SELECT id, title, COALESCE(category,''), COALESCE(tags,''), COALESCE(updated_at,'') FROM wiki_articles ORDER BY title"
+    )
+
+    tree: dict = {}  # domain -> tool -> [articles]
+    no_ref = []
+
+    for r in rows:
+        article = {"id": r[0], "title": r[1], "category": r[2], "tags": r[3], "updated_at": r[4]}
+        parsed = _parse_ref(r[1])
+
+        if parsed and len(parsed["segments"]) >= 3:
+            # segments[0] = type, [1] = domain, [2] = tool, [3+] = action
+            domain = parsed["segments"][1]["code"]
+            tool = parsed["segments"][2]["code"]
+            article["ref"] = parsed["ref"]
+            article["segments"] = parsed["segments"]
+
+            if domain not in tree:
+                tree[domain] = {"label": parsed["segments"][1]["label"], "tools": {}}
+            if tool not in tree[domain]["tools"]:
+                tree[domain]["tools"][tool] = {"label": parsed["segments"][2]["label"], "articles": []}
+            tree[domain]["tools"][tool]["articles"].append(article)
+        else:
+            article["ref"] = parsed["ref"] if parsed else None
+            article["segments"] = parsed["segments"] if parsed else []
+            no_ref.append(article)
+
+    return {"tree": tree, "unclassified": no_ref}
+
+
+@router.get("/references/segments")
+async def reference_segments(db=Depends(get_raw_db)):
+    """Extract all unique segments across all articles for filter dropdowns."""
+    rows = await db.execute_fetchall("SELECT title FROM wiki_articles")
+
+    types = set()
+    domains = set()
+    tools = set()
+    actions = set()
+
+    for r in rows:
+        parsed = _parse_ref(r[0])
+        if parsed and len(parsed["segments"]) >= 2:
+            types.add(parsed["segments"][0]["code"])
+            if len(parsed["segments"]) >= 2:
+                domains.add(parsed["segments"][1]["code"])
+            if len(parsed["segments"]) >= 3:
+                tools.add(parsed["segments"][2]["code"])
+            if len(parsed["segments"]) >= 4:
+                actions.add(parsed["segments"][3]["code"])
+
+    def to_list(s):
+        return [{"code": c, "label": SEGMENT_LABELS.get(c, c)} for c in sorted(s)]
+
+    return {
+        "types": to_list(types),
+        "domains": to_list(domains),
+        "tools": to_list(tools),
+        "actions": to_list(actions),
+    }
+
+
+@router.get("/{article_id}/related")
+async def related_articles(article_id: int, db=Depends(get_raw_db)):
+    """Find related articles sharing the same tool or domain."""
+    rows = await db.execute_fetchall(
+        "SELECT title FROM wiki_articles WHERE id = ?", (article_id,)
+    )
+    if not rows:
+        return []
+
+    parsed = _parse_ref(rows[0][0])
+    if not parsed or len(parsed["segments"]) < 3:
+        return []
+
+    # Find articles sharing the same tool (segment[2])
+    tool_code = parsed["segments"][2]["code"]
+    domain_code = parsed["segments"][1]["code"]
+
+    all_articles = await db.execute_fetchall(
+        "SELECT id, title, COALESCE(category,''), COALESCE(updated_at,'') FROM wiki_articles WHERE id != ? ORDER BY title",
+        (article_id,)
+    )
+
+    related = []
+    for r in all_articles:
+        p = _parse_ref(r[1])
+        if not p or len(p["segments"]) < 3:
+            continue
+        # Same tool = strong match, same domain = weak match
+        if p["segments"][2]["code"] == tool_code:
+            related.append({"id": r[0], "title": r[1], "category": r[2], "updated_at": r[3], "match": "tool", "ref": p["ref"]})
+        elif p["segments"][1]["code"] == domain_code:
+            related.append({"id": r[0], "title": r[1], "category": r[2], "updated_at": r[3], "match": "domain", "ref": p["ref"]})
+
+    # Sort: tool matches first, then domain
+    related.sort(key=lambda x: (0 if x["match"] == "tool" else 1, x["title"]))
+    return related[:10]
