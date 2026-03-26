@@ -47,7 +47,7 @@
   let searchDebounceTimer;
 
   // View
-  let viewMode = 'list'; // 'list' | 'kanban'
+  let viewMode = 'list'; // 'list' | 'kanban' | 'stats'
   let expandedTaskId = null;
 
   // Task dialog
@@ -177,6 +177,58 @@
 
   // Kanban
   $: kanbanColumns = buildKanban(filteredTasks);
+
+  // Stats computed from all tasks (not filtered)
+  $: taskStats = computeStats(tasks);
+
+  function computeStats(allTasks) {
+    const today = new Date().toISOString().slice(0, 10);
+    const total = allTasks.length;
+    const done = allTasks.filter(t => t.done).length;
+    const open = total - done;
+    const overdue = allTasks.filter(t => !t.done && t.due_date && t.due_date < today).length;
+    const completionRate = total > 0 ? Math.round(done / total * 100) : 0;
+
+    // By category
+    const byCat = {};
+    for (const t of allTasks) {
+      const cat = t.category || 'Sans catégorie';
+      if (!byCat[cat]) byCat[cat] = { total: 0, done: 0, open: 0 };
+      byCat[cat].total++;
+      if (t.done) byCat[cat].done++;
+      else byCat[cat].open++;
+    }
+
+    // By priority
+    const byPrio = [0, 0, 0]; // [basse, normale, urgente]
+    for (const t of allTasks.filter(t => !t.done)) {
+      byPrio[(t.priority || 2) - 1]++;
+    }
+
+    // By site
+    const bySite = {};
+    for (const t of allTasks) {
+      const site = t.site || 'Sans site';
+      if (!bySite[site]) bySite[site] = { total: 0, done: 0, open: 0 };
+      bySite[site].total++;
+      if (t.done) bySite[site].done++;
+      else bySite[site].open++;
+    }
+
+    // Completion over last 7 days
+    const weekData = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const ds = d.toISOString().slice(0, 10);
+      const dayLabel = d.toLocaleDateString('fr-FR', { weekday: 'short' });
+      const created = allTasks.filter(t => (t.created_at || '').slice(0, 10) === ds).length;
+      const completed = allTasks.filter(t => t.done && (t.created_at || '').slice(0, 10) === ds).length;
+      weekData.push({ label: dayLabel, created, completed });
+    }
+
+    return { total, done, open, overdue, completionRate, byCat, byPrio, bySite, weekData };
+  }
 
   function buildKanban(list) {
     const open = list.filter(t => !t.done);
@@ -482,13 +534,11 @@
   <!-- ── Action bar ─────────────────────────────────────── -->
   <div class="action-bar">
     <div class="action-left">
-      <button
-        class="btn-toggle"
-        class:active={viewMode === 'kanban'}
-        on:click={() => viewMode = viewMode === 'list' ? 'kanban' : 'list'}
-      >
-        {viewMode === 'kanban' ? '📋 Liste' : '🗂️ Kanban'}
-      </button>
+      <div class="view-segmented">
+        <button class="vseg" class:vseg-active={viewMode === 'list'} on:click={() => viewMode = 'list'}>{'\u{1F4CB}'} Liste</button>
+        <button class="vseg" class:vseg-active={viewMode === 'kanban'} on:click={() => viewMode = 'kanban'}>{'\u{1F5C2}\uFE0F'} Kanban</button>
+        <button class="vseg" class:vseg-active={viewMode === 'stats'} on:click={() => viewMode = 'stats'}>{'\u{1F4CA}'} Stats</button>
+      </div>
       <button class="btn-ghost" on:click={openTemplateModal}>📋 Templates</button>
       <button class="btn-primary" on:click={openCreateDialog}>+ Ajouter</button>
     </div>
@@ -672,6 +722,106 @@
           </div>
         </div>
       {/each}
+    </div>
+
+  {:else if viewMode === 'stats'}
+    <!-- ── Stats View ──────────────────────────────────────── -->
+    <div class="stats-view">
+      <!-- KPI Row -->
+      <div class="stats-kpi-row">
+        <div class="stats-kpi">
+          <span class="stats-kpi-value">{taskStats.total}</span>
+          <span class="stats-kpi-label">Total</span>
+        </div>
+        <div class="stats-kpi">
+          <span class="stats-kpi-value" style="color:#22C55E">{taskStats.done}</span>
+          <span class="stats-kpi-label">Termin{'\u00e9'}es</span>
+        </div>
+        <div class="stats-kpi">
+          <span class="stats-kpi-value" style="color:#3B82F6">{taskStats.open}</span>
+          <span class="stats-kpi-label">En cours</span>
+        </div>
+        <div class="stats-kpi">
+          <span class="stats-kpi-value" style="color:#EF4444">{taskStats.overdue}</span>
+          <span class="stats-kpi-label">En retard</span>
+        </div>
+        <div class="stats-kpi">
+          <span class="stats-kpi-value" style="color:var(--accent)">{taskStats.completionRate}%</span>
+          <span class="stats-kpi-label">Compl{'\u00e9'}tion</span>
+        </div>
+      </div>
+
+      <div class="stats-grid">
+        <!-- By Category -->
+        <div class="stats-card">
+          <h3>{'\u{1F4CA}'} Par cat{'\u00e9'}gorie</h3>
+          <div class="stats-bars">
+            {#each Object.entries(taskStats.byCat).sort((a, b) => b[1].total - a[1].total) as [cat, data]}
+              <div class="stats-bar-row">
+                <span class="stats-bar-label">{cat}</span>
+                <div class="stats-bar-track">
+                  <div class="stats-bar-fill done-fill" style="width:{data.total > 0 ? (data.done / data.total * 100) : 0}%"></div>
+                </div>
+                <span class="stats-bar-numbers">{data.done}/{data.total}</span>
+              </div>
+            {/each}
+            {#if Object.keys(taskStats.byCat).length === 0}
+              <p class="stats-empty">Aucune t{'\u00e2'}che</p>
+            {/if}
+          </div>
+        </div>
+
+        <!-- By Priority -->
+        <div class="stats-card">
+          <h3>{'\u26A0\uFE0F'} T{'\u00e2'}ches ouvertes par priorit{'\u00e9'}</h3>
+          <div class="stats-priority-grid">
+            {#each PRIORITIES as prio, i}
+              <div class="stats-prio-item">
+                <div class="stats-prio-circle" style="border-color:{prio.color};color:{prio.color}">
+                  {taskStats.byPrio[i]}
+                </div>
+                <span class="stats-prio-label">{prio.icon} {prio.label}</span>
+              </div>
+            {/each}
+          </div>
+        </div>
+
+        <!-- By Site -->
+        <div class="stats-card">
+          <h3>{'\u{1F3EB}'} Par site</h3>
+          <div class="stats-bars">
+            {#each Object.entries(taskStats.bySite).sort((a, b) => b[1].total - a[1].total) as [site, data]}
+              <div class="stats-bar-row">
+                <span class="stats-bar-label">{site}</span>
+                <div class="stats-bar-track">
+                  <div class="stats-bar-fill done-fill" style="width:{data.total > 0 ? (data.done / data.total * 100) : 0}%"></div>
+                </div>
+                <span class="stats-bar-numbers">{data.done}/{data.total}</span>
+              </div>
+            {/each}
+          </div>
+        </div>
+
+        <!-- Week activity -->
+        <div class="stats-card">
+          <h3>{'\u{1F4C8}'} Activit{'\u00e9'} 7 derniers jours</h3>
+          <div class="stats-week-chart">
+            {#each taskStats.weekData as day}
+              <div class="stats-week-col">
+                <div class="stats-week-bars">
+                  <div class="stats-week-bar created" style="height:{Math.max(day.created * 20, 2)}px" title="{day.created} cr{'\u00e9'}{'\u00e9'}es"></div>
+                  <div class="stats-week-bar completed" style="height:{Math.max(day.completed * 20, 2)}px" title="{day.completed} termin{'\u00e9'}es"></div>
+                </div>
+                <span class="stats-week-label">{day.label}</span>
+              </div>
+            {/each}
+          </div>
+          <div class="stats-week-legend">
+            <span class="stats-legend-item"><span class="stats-legend-dot" style="background:#3B82F6"></span> Cr{'\u00e9'}{'\u00e9'}es</span>
+            <span class="stats-legend-item"><span class="stats-legend-dot" style="background:#22C55E"></span> Termin{'\u00e9'}es</span>
+          </div>
+        </div>
+      </div>
     </div>
   {/if}
 </div>
@@ -1410,6 +1560,74 @@
     color: var(--text-muted);
     font-size: 14px;
   }
+
+  /* ── View segmented control ─────────────────────────────── */
+  .view-segmented {
+    display: flex; background: var(--bg-card); border: 1px solid var(--border-subtle);
+    border-radius: 8px; overflow: hidden;
+  }
+  .vseg {
+    background: transparent; border: none; color: var(--text-secondary);
+    font-size: 12px; padding: 6px 12px; cursor: pointer; font-family: inherit;
+    transition: all 0.15s; white-space: nowrap;
+  }
+  .vseg:hover { background: var(--bg-hover); color: var(--text-primary); }
+  .vseg-active {
+    background: var(--accent); color: #fff;
+    box-shadow: 0 2px 8px rgba(var(--accent-rgb), 0.3);
+  }
+
+  /* ── Stats View ────────────────────────────────────────── */
+  .stats-view { animation: fadeIn 0.3s ease; }
+  .stats-kpi-row {
+    display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap;
+  }
+  .stats-kpi {
+    flex: 1; min-width: 100px;
+    background: var(--bg-card); border: 1px solid var(--border-subtle);
+    border-radius: 12px; padding: 16px 20px; text-align: center;
+    backdrop-filter: blur(12px);
+  }
+  .stats-kpi-value { display: block; font-size: 28px; font-weight: 800; color: var(--text-primary); }
+  .stats-kpi-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
+  .stats-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+  }
+  @media (max-width: 900px) { .stats-grid { grid-template-columns: 1fr; } }
+  .stats-card {
+    background: var(--bg-card); border: 1px solid var(--border-subtle);
+    border-radius: 12px; padding: 18px 20px; backdrop-filter: blur(12px);
+  }
+  .stats-card h3 { margin: 0 0 14px; font-size: 14px; font-weight: 600; color: var(--text-primary); }
+
+  .stats-bars { display: flex; flex-direction: column; gap: 8px; }
+  .stats-bar-row { display: flex; align-items: center; gap: 8px; }
+  .stats-bar-label { width: 110px; font-size: 12px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .stats-bar-track { flex: 1; height: 8px; background: rgba(255,255,255,0.06); border-radius: 4px; overflow: hidden; }
+  .stats-bar-fill.done-fill { height: 100%; background: linear-gradient(90deg, #22C55E, #4ADE80); border-radius: 4px; transition: width 0.5s ease; }
+  .stats-bar-numbers { font-size: 11px; color: var(--text-muted); min-width: 40px; text-align: right; font-variant-numeric: tabular-nums; }
+
+  .stats-priority-grid { display: flex; justify-content: space-around; padding: 10px 0; }
+  .stats-prio-item { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .stats-prio-circle {
+    width: 56px; height: 56px; border-radius: 50%;
+    border: 3px solid; display: flex; align-items: center; justify-content: center;
+    font-size: 22px; font-weight: 800;
+  }
+  .stats-prio-label { font-size: 12px; color: var(--text-secondary); }
+
+  .stats-week-chart { display: flex; justify-content: space-around; align-items: flex-end; height: 100px; padding: 10px 0; }
+  .stats-week-col { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .stats-week-bars { display: flex; gap: 3px; align-items: flex-end; }
+  .stats-week-bar { width: 14px; border-radius: 3px 3px 0 0; min-height: 2px; }
+  .stats-week-bar.created { background: #3B82F6; }
+  .stats-week-bar.completed { background: #22C55E; }
+  .stats-week-label { font-size: 10px; color: var(--text-muted); text-transform: capitalize; }
+  .stats-week-legend { display: flex; gap: 16px; justify-content: center; margin-top: 8px; }
+  .stats-legend-item { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-secondary); }
+  .stats-legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .stats-empty { color: var(--text-muted); font-size: 13px; text-align: center; padding: 16px; }
 
   /* ── Kanban ────────────────────────────────────────────── */
   .kanban-board {
