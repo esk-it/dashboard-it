@@ -179,9 +179,16 @@
     }
   }
 
-  function openInBrowser() {
-    if (readingArticle?.link) {
-      window.open(readingArticle.link, '_blank', 'noopener');
+  async function openInBrowser(url) {
+    const link = url || readingArticle?.link;
+    if (!link) return;
+    try {
+      // Tauri: use shell plugin to open URL in default browser
+      const { open } = await import('@tauri-apps/plugin-shell');
+      await open(link);
+    } catch {
+      // Fallback for dev mode
+      window.open(link, '_blank', 'noopener');
     }
   }
 
@@ -428,7 +435,7 @@
           {/if}
         </div>
         <div class="reading-actions">
-          <button class="btn-open-browser" on:click={openInBrowser} title="Ouvrir dans le navigateur">
+          <button class="btn-open-browser" on:click={() => openInBrowser()} title="Ouvrir dans le navigateur">
             {'\u{1F310}'} Navigateur
           </button>
           <button class="btn-close-reading" on:click={closeReading}>{'\u2715'}</button>
@@ -443,7 +450,7 @@
         {/if}
       </div>
       <div class="reading-footer">
-        <button class="btn-open-browser full" on:click={openInBrowser}>
+        <button class="btn-open-browser full" on:click={() => openInBrowser()}>
           {'\u{1F310}'} Lire l'article complet dans le navigateur
         </button>
       </div>
