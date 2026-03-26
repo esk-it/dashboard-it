@@ -35,6 +35,27 @@
   // Logo error tracking
   let logoErrors = {};
 
+  // Detail panel
+  let selectedSupplier = null;
+  let supplierDocuments = [];
+  let loadingDocs = false;
+
+  async function openDetail(s) {
+    selectedSupplier = s;
+    loadingDocs = true;
+    try {
+      const docs = await api.get('/api/documents');
+      // Find documents linked to this supplier
+      supplierDocuments = docs.filter(d => d.supplier_id === s.id);
+    } catch { supplierDocuments = []; }
+    loadingDocs = false;
+  }
+
+  function closeDetail() {
+    selectedSupplier = null;
+    supplierDocuments = [];
+  }
+
   // ── Helpers ────────────────────────────────────────────────
   function defaultForm() {
     return { name: '', domain: '', phone: '', email: '', contact: '', notes: '' };
@@ -264,7 +285,7 @@
 
       <!-- Supplier Rows -->
       {#each group as s (s.id)}
-        <div class="supplier-row" on:click={() => openEdit(s)} role="button" tabindex="0">
+        <div class="supplier-row" class:selected-row={selectedSupplier?.id === s.id} on:click={() => openDetail(s)} role="button" tabindex="0">
           <!-- Avatar -->
           <div class="avatar" style="border-color: {getDomainColor(s.domain)}">
             {#if s.logo_path && !logoErrors[s.id]}
@@ -304,6 +325,106 @@
         </div>
       {/each}
     {/each}
+  </div>
+{/if}
+
+<!-- ── Detail Panel (slide-in) ─────────────────────────────── -->
+{#if selectedSupplier}
+  {@const s = selectedSupplier}
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="detail-overlay" on:click={closeDetail}>
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="detail-panel" on:click|stopPropagation>
+      <div class="detail-header">
+        <div class="detail-avatar" style="border-color: {getDomainColor(s.domain)}">
+          {#if s.logo_path && !logoErrors[s.id]}
+            <img src="{API_BASE}/api/suppliers/{s.id}/logo" alt="" on:error={() => { logoErrors[s.id] = true; logoErrors = logoErrors; }} />
+          {:else}
+            <span class="detail-initials" style="background: {getDomainColor(s.domain)}33; color: {getDomainColor(s.domain)}">{getInitials(s.name)}</span>
+          {/if}
+        </div>
+        <div class="detail-title">
+          <h2>{s.name}</h2>
+          <span class="domain-badge" style="background: {getDomainColor(s.domain)}22; color: {getDomainColor(s.domain)}; border-color: {getDomainColor(s.domain)}44">{s.domain || 'Autre'}</span>
+        </div>
+        <div class="detail-header-actions">
+          <button class="btn-action" on:click={() => { closeDetail(); openEdit(s); }} title="Modifier">{'\u270F\uFE0F'}</button>
+          <button class="btn-close-detail" on:click={closeDetail}>{'\u2715'}</button>
+        </div>
+      </div>
+
+      <div class="detail-body">
+        <!-- Contact info -->
+        <div class="detail-section">
+          <h3>{'\u{1F4CB}'} Coordonn{'\u00e9'}es</h3>
+          <div class="detail-fields">
+            {#if s.contact}
+              <div class="detail-field">
+                <span class="df-icon">{'\u{1F464}'}</span>
+                <span class="df-label">Contact</span>
+                <span class="df-value">{s.contact}</span>
+              </div>
+            {/if}
+            {#if s.phone}
+              <div class="detail-field clickable" on:click={() => copyToClipboard(s.phone, 'T\u00e9l\u00e9phone')}>
+                <span class="df-icon">{'\u{1F4DE}'}</span>
+                <span class="df-label">T{'\u00e9'}l{'\u00e9'}phone</span>
+                <span class="df-value">{s.phone}</span>
+                <span class="df-copy">{'\u{1F4CB}'}</span>
+              </div>
+            {/if}
+            {#if s.email}
+              <div class="detail-field clickable" on:click={() => copyToClipboard(s.email, 'Email')}>
+                <span class="df-icon">{'\u2709\uFE0F'}</span>
+                <span class="df-label">Email</span>
+                <span class="df-value">{s.email}</span>
+                <span class="df-copy">{'\u{1F4CB}'}</span>
+              </div>
+            {/if}
+            {#if !s.contact && !s.phone && !s.email}
+              <p class="detail-empty">Aucune coordonn{'\u00e9'}e renseign{'\u00e9'}e</p>
+            {/if}
+          </div>
+        </div>
+
+        <!-- Notes -->
+        {#if s.notes}
+          <div class="detail-section">
+            <h3>{'\u{1F4DD}'} Notes</h3>
+            <p class="detail-notes">{s.notes}</p>
+          </div>
+        {/if}
+
+        <!-- Documents liés -->
+        <div class="detail-section">
+          <h3>{'\u{1F4C4}'} Documents li{'\u00e9'}s</h3>
+          {#if loadingDocs}
+            <p class="detail-empty">Chargement...</p>
+          {:else if supplierDocuments.length > 0}
+            <div class="detail-docs">
+              {#each supplierDocuments as doc}
+                <div class="detail-doc-row">
+                  <span class="doc-type-badge">{doc.doc_type}</span>
+                  <span class="doc-title">{doc.title}</span>
+                  {#if doc.doc_date}
+                    <span class="doc-date">{new Date(doc.doc_date).toLocaleDateString('fr-FR')}</span>
+                  {/if}
+                </div>
+              {/each}
+            </div>
+          {:else}
+            <p class="detail-empty">Aucun document li{'\u00e9'} {'\u00e0'} ce prestataire</p>
+          {/if}
+        </div>
+
+        <!-- Metadata -->
+        <div class="detail-section detail-meta-section">
+          <span class="detail-meta">{'\u{1F4C5}'} Ajout{'\u00e9'} le {s.created_at ? new Date(s.created_at).toLocaleDateString('fr-FR') : '—'}</span>
+        </div>
+      </div>
+    </div>
   </div>
 {/if}
 
@@ -495,6 +616,78 @@
   .empty-state { text-align: center; padding: 60px; color: rgba(255,255,255,0.4); }
   .empty-icon { font-size: 2.5rem; display: block; margin-bottom: 12px; }
   .loading { text-align: center; color: rgba(255,255,255,0.4); padding: 40px; }
+
+  /* ── Detail Panel ───────────────────────────────────────── */
+  .selected-row { background: rgba(var(--accent-rgb, 108,99,255), 0.08) !important; border-color: rgba(var(--accent-rgb, 108,99,255), 0.2) !important; }
+  .detail-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 90;
+    display: flex; justify-content: flex-end;
+    backdrop-filter: blur(2px); animation: fadeIn 0.15s ease;
+  }
+  .detail-panel {
+    width: 480px; max-width: 90vw; height: 100vh;
+    background: var(--bg-card-solid, #1a1a2e); border-left: 1px solid var(--border-subtle);
+    display: flex; flex-direction: column; overflow: hidden;
+    animation: slideInRight 0.25s ease;
+    box-shadow: -8px 0 40px rgba(0,0,0,0.3);
+  }
+  @keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }
+  .detail-header {
+    display: flex; align-items: center; gap: 14px;
+    padding: 20px 24px; border-bottom: 1px solid var(--border-subtle);
+  }
+  .detail-avatar {
+    width: 56px; height: 56px; border-radius: 14px; border: 2px solid;
+    overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,0.04);
+  }
+  .detail-avatar img { width: 100%; height: 100%; object-fit: contain; }
+  .detail-initials { font-size: 20px; font-weight: 700; }
+  .detail-title { flex: 1; min-width: 0; }
+  .detail-title h2 { margin: 0; font-size: 18px; font-weight: 700; color: var(--text-primary); }
+  .detail-header-actions { display: flex; gap: 6px; }
+  .btn-close-detail {
+    background: none; border: none; color: var(--text-muted); font-size: 18px;
+    cursor: pointer; padding: 4px 8px; border-radius: 6px;
+  }
+  .btn-close-detail:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+  .detail-body { flex: 1; overflow-y: auto; padding: 20px 24px; }
+  .detail-section { margin-bottom: 22px; }
+  .detail-section h3 { margin: 0 0 10px; font-size: 13px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+  .detail-fields { display: flex; flex-direction: column; gap: 6px; }
+  .detail-field {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px; border-radius: 8px; background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.04);
+  }
+  .detail-field.clickable { cursor: pointer; transition: all 0.15s; }
+  .detail-field.clickable:hover { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.08); }
+  .df-icon { font-size: 16px; flex-shrink: 0; }
+  .df-label { font-size: 11px; color: var(--text-muted); min-width: 65px; }
+  .df-value { flex: 1; font-size: 13px; color: var(--text-primary); }
+  .df-copy { font-size: 12px; opacity: 0; transition: opacity 0.15s; }
+  .detail-field.clickable:hover .df-copy { opacity: 0.5; }
+
+  .detail-notes { font-size: 13px; color: var(--text-secondary); line-height: 1.6; margin: 0; white-space: pre-wrap; }
+  .detail-empty { font-size: 12px; color: var(--text-muted); margin: 0; }
+
+  .detail-docs { display: flex; flex-direction: column; gap: 4px; }
+  .detail-doc-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 10px; border-radius: 6px; background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.04);
+  }
+  .doc-type-badge {
+    font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 4px;
+    background: rgba(var(--accent-rgb, 108,99,255), 0.1); color: var(--accent);
+    flex-shrink: 0;
+  }
+  .doc-title { flex: 1; font-size: 12px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .doc-date { font-size: 11px; color: var(--text-muted); flex-shrink: 0; }
+
+  .detail-meta-section { border-top: 1px solid var(--border-subtle); padding-top: 12px; }
+  .detail-meta { font-size: 11px; color: var(--text-muted); }
 
   .dialog-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,0.6);

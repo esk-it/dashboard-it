@@ -169,11 +169,24 @@
     }
   }
 
+  // Reading pane
+  let readingArticle = null;
+
   function openArticle(article) {
     if (article.link) {
       markRead(article.link);
-      window.open(article.link, '_blank', 'noopener');
+      readingArticle = article;
     }
+  }
+
+  function openInBrowser() {
+    if (readingArticle?.link) {
+      window.open(readingArticle.link, '_blank', 'noopener');
+    }
+  }
+
+  function closeReading() {
+    readingArticle = null;
   }
 
   // ── Lifecycle ──────────────────────────────────────────
@@ -399,7 +412,104 @@
   </div>
 </div>
 
+<!-- ── Reading Pane ──────────────────────────────────────── -->
+{#if readingArticle}
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="reading-overlay" on:click={closeReading}>
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="reading-panel" on:click|stopPropagation>
+      <div class="reading-header">
+        <div class="reading-meta">
+          <span class="reading-source">{readingArticle.feedName || 'Source'}</span>
+          {#if readingArticle.pubDate}
+            <span class="reading-date">{new Date(readingArticle.pubDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+          {/if}
+        </div>
+        <div class="reading-actions">
+          <button class="btn-open-browser" on:click={openInBrowser} title="Ouvrir dans le navigateur">
+            {'\u{1F310}'} Navigateur
+          </button>
+          <button class="btn-close-reading" on:click={closeReading}>{'\u2715'}</button>
+        </div>
+      </div>
+      <h1 class="reading-title">{readingArticle.title}</h1>
+      <div class="reading-content">
+        {#if readingArticle.description}
+          {@html readingArticle.description}
+        {:else}
+          <p class="reading-empty">Pas de contenu disponible. Ouvrez dans le navigateur pour lire l'article complet.</p>
+        {/if}
+      </div>
+      <div class="reading-footer">
+        <button class="btn-open-browser full" on:click={openInBrowser}>
+          {'\u{1F310}'} Lire l'article complet dans le navigateur
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
 <style>
+  /* ── Reading Pane ──────────────────────────────────────── */
+  .reading-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 90;
+    display: flex; justify-content: center; align-items: center;
+    backdrop-filter: blur(4px); animation: fadeIn 0.15s ease;
+  }
+  .reading-panel {
+    width: 720px; max-width: 95vw; max-height: 90vh;
+    background: var(--bg-card-solid, #1a1a2e);
+    border: 1px solid var(--border-subtle); border-radius: 16px;
+    display: flex; flex-direction: column; overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+    animation: slideUp 0.2s ease;
+  }
+  @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  .reading-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 20px; border-bottom: 1px solid var(--border-subtle);
+  }
+  .reading-meta { display: flex; gap: 12px; align-items: center; }
+  .reading-source {
+    font-size: 12px; font-weight: 700; text-transform: uppercase;
+    color: var(--accent); letter-spacing: 0.5px;
+  }
+  .reading-date { font-size: 12px; color: var(--text-muted); }
+  .reading-actions { display: flex; gap: 8px; align-items: center; }
+  .btn-open-browser {
+    background: rgba(255,255,255,0.06); border: 1px solid var(--border-subtle);
+    border-radius: 8px; padding: 5px 12px; color: var(--text-secondary);
+    font-size: 12px; cursor: pointer; font-family: inherit; transition: all 0.15s;
+  }
+  .btn-open-browser:hover { background: var(--bg-hover); color: var(--text-primary); }
+  .btn-open-browser.full {
+    width: 100%; padding: 10px; text-align: center; font-weight: 600;
+    background: rgba(var(--accent-rgb), 0.1); color: var(--accent);
+    border-color: rgba(var(--accent-rgb), 0.2);
+  }
+  .btn-open-browser.full:hover { background: rgba(var(--accent-rgb), 0.2); }
+  .btn-close-reading {
+    background: none; border: none; color: var(--text-muted); font-size: 18px;
+    cursor: pointer; padding: 4px 8px; border-radius: 6px;
+  }
+  .btn-close-reading:hover { background: var(--bg-hover); color: var(--text-primary); }
+  .reading-title {
+    font-size: 22px; font-weight: 700; color: var(--text-primary);
+    padding: 20px 24px 0; margin: 0; line-height: 1.3;
+  }
+  .reading-content {
+    flex: 1; overflow-y: auto; padding: 16px 24px;
+    font-size: 14px; line-height: 1.7; color: var(--text-secondary);
+  }
+  .reading-content :global(img) { max-width: 100%; border-radius: 8px; margin: 12px 0; }
+  .reading-content :global(a) { color: var(--accent); }
+  .reading-content :global(p) { margin: 0 0 12px; }
+  .reading-content :global(h2), .reading-content :global(h3) { color: var(--text-primary); margin: 16px 0 8px; }
+  .reading-empty { color: var(--text-muted); text-align: center; padding: 40px; }
+  .reading-footer { padding: 12px 20px; border-top: 1px solid var(--border-subtle); }
+
   /* ── Page ──────────────────────────────────────────────── */
   .news-page {
     animation: fadeIn 0.35s ease-out;
