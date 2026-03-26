@@ -19,6 +19,7 @@
   import ParcPage from './lib/pages/ParcPage.svelte';
   import SecurityPage from './lib/pages/SecurityPage.svelte';
   import MonitoringPage from './lib/pages/MonitoringPage.svelte';
+  import LauncherPage from './lib/pages/LauncherPage.svelte';
   import ToolsPage from './lib/pages/ToolsPage.svelte';
   import SettingsPage from './lib/pages/SettingsPage.svelte';
 
@@ -75,6 +76,8 @@
     <ChangelogPage />
   {:else if $currentPage === '/monitoring'}
     <MonitoringPage />
+  {:else if $currentPage === '/launcher'}
+    <LauncherPage />
   {:else if $currentPage === '/tools'}
     <ToolsPage />
   {:else if $currentPage === '/settings'}

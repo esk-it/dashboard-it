@@ -368,6 +368,20 @@ async def init_db():
             details TEXT NOT NULL DEFAULT '',
             FOREIGN KEY (machine_id) REFERENCES machines(id) ON DELETE CASCADE
         )""",
+        # --- Quick Links / Launcher ---
+        """CREATE TABLE IF NOT EXISTS quick_links (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            url TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            category TEXT NOT NULL DEFAULT '',
+            icon_type TEXT NOT NULL DEFAULT 'emoji',
+            icon_value TEXT NOT NULL DEFAULT '🔗',
+            color TEXT NOT NULL DEFAULT '#6C63FF',
+            favorite INTEGER NOT NULL DEFAULT 0,
+            sort_order INTEGER NOT NULL DEFAULT 100,
+            created_at TEXT NOT NULL
+        )""",
     ]
 
     for stmt in statements:

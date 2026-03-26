@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .database import init_db
-from .routers import dashboard, tasks, settings, search, planning, documents, changelog, wiki, news, suppliers, parc, security, monitoring, tools, glpi
+from .routers import dashboard, tasks, settings, search, planning, documents, changelog, wiki, news, suppliers, parc, security, monitoring, tools, glpi, launcher
 
 
 @asynccontextmanager
@@ -41,3 +41,4 @@ app.include_router(security.router)
 app.include_router(monitoring.router)
 app.include_router(tools.router)
 app.include_router(glpi.router)
+app.include_router(launcher.router)
