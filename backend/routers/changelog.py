@@ -47,6 +47,26 @@ async def list_categories(db=Depends(get_raw_db)):
     ]
 
 
+@router.post("/categories")
+async def create_category(body: dict, db=Depends(get_raw_db)):
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(400, "name required")
+    color = body.get("color_hex", "#64748B")
+    await db.execute(
+        "INSERT OR IGNORE INTO changelog_categories (name, color_hex, icon_key, sort_order) VALUES (?, ?, '', 100)",
+        (name, color),
+    )
+    await db.commit()
+    return {"status": "ok", "name": name}
+
+
+@router.delete("/categories/{cat_id}", status_code=204)
+async def delete_category(cat_id: int, db=Depends(get_raw_db)):
+    await db.execute("DELETE FROM changelog_categories WHERE id = ?", (cat_id,))
+    await db.commit()
+
+
 @router.get("/stats", response_model=ChangelogStatsResponse)
 async def stats(db=Depends(get_raw_db)):
     # Count by category

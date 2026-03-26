@@ -427,6 +427,26 @@ async def _seed_defaults(db):
                 (name, 100),
             )
 
+    # Default changelog categories
+    row = await db.execute("SELECT COUNT(*) FROM changelog_categories")
+    count = (await row.fetchone())[0]
+    if count == 0:
+        cl_cats = [
+            ("Réseau", "#3B82F6", 10),
+            ("Serveur", "#8B5CF6", 20),
+            ("Sécurité", "#EF4444", 30),
+            ("Application", "#22C55E", 40),
+            ("Infrastructure", "#F59E0B", 50),
+            ("Poste", "#EC4899", 60),
+            ("Active Directory", "#06A6C9", 70),
+            ("Messagerie", "#F97316", 80),
+        ]
+        for name, color, order in cl_cats:
+            await db.execute(
+                "INSERT INTO changelog_categories (name, color_hex, icon_key, sort_order) VALUES (?, ?, '', ?)",
+                (name, color, order),
+            )
+
     # Default supplier domains
     row = await db.execute("SELECT COUNT(*) FROM supplier_domains")
     count = (await row.fetchone())[0]

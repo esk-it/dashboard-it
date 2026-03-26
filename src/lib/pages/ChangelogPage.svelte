@@ -41,6 +41,10 @@
   // Delete confirmation
   let confirmDeleteId = null;
 
+  // New category inline
+  let newCategoryName = '';
+  let addingCategory = false;
+
   // ── Derived ────────────────────────────────────────────
   $: filteredEntries = entries.filter(e => {
     if (filterCategory && e.category !== filterCategory) return false;
@@ -187,6 +191,24 @@
   function closeDialog() {
     showDialog = false;
     editingEntry = null;
+  }
+
+  // ── Category management ──────────────────────────────
+  async function addCategory() {
+    const name = newCategoryName.trim();
+    if (!name) return;
+    addingCategory = true;
+    try {
+      const colors = ['#3B82F6','#8B5CF6','#EF4444','#22C55E','#F59E0B','#EC4899','#06A6C9','#F97316','#64748B'];
+      const color = colors[categories.length % colors.length];
+      await api.post('/api/changelog/categories', { name, color_hex: color });
+      await fetchCategories();
+      form.category = name;
+      newCategoryName = '';
+    } catch (e) {
+      toastError('Erreur lors de la cr\u00e9ation de la cat\u00e9gorie');
+    }
+    addingCategory = false;
   }
 
   // ── Search debounce ────────────────────────────────────
@@ -360,13 +382,18 @@
 
         <div class="form-row">
           <label class="form-label form-half">
-            Catégorie
+            Cat{'\u00e9'}gorie
             <select class="form-input" bind:value={form.category}>
-              <option value="">— Sélectionner —</option>
+              <option value="">— S{'\u00e9'}lectionner —</option>
               {#each categories as cat}
                 <option value={cat}>{cat}</option>
               {/each}
             </select>
+            <div class="add-cat-row">
+              <input type="text" class="form-input add-cat-input" bind:value={newCategoryName}
+                placeholder="Nouvelle cat{'\u00e9'}gorie..." on:keydown={(e) => e.key === 'Enter' && addCategory()} />
+              <button class="btn-add-cat" on:click={addCategory} disabled={addingCategory || !newCategoryName.trim()}>+</button>
+            </div>
           </label>
           <label class="form-label form-half">
             Impact
@@ -902,6 +929,23 @@
     border-color: var(--impact-color);
     color: var(--impact-color);
   }
+
+  /* Add category inline */
+  .add-cat-row {
+    display: flex; gap: 4px; margin-top: 4px;
+  }
+  .add-cat-input {
+    flex: 1; padding: 4px 8px !important; font-size: 12px !important;
+  }
+  .btn-add-cat {
+    background: var(--accent); color: #fff; border: none;
+    border-radius: 6px; width: 28px; height: 28px;
+    font-size: 16px; font-weight: 700; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: opacity 0.15s; flex-shrink: 0;
+  }
+  .btn-add-cat:hover { opacity: 0.85; }
+  .btn-add-cat:disabled { opacity: 0.3; cursor: not-allowed; }
 
   .impact-btn.impact-active {
     background: color-mix(in srgb, var(--impact-color) 15%, transparent);
