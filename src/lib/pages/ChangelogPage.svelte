@@ -58,6 +58,25 @@
     return db.localeCompare(da);
   });
 
+  // Group entries by month for timeline separators
+  $: groupedByMonth = groupEntriesByMonth(filteredEntries);
+
+  function groupEntriesByMonth(list) {
+    const groups = [];
+    let currentMonth = '';
+    for (const entry of list) {
+      const dateStr = entry.event_date || entry.created_at || '';
+      const d = new Date(dateStr);
+      const monthKey = isNaN(d.getTime()) ? 'Sans date' : d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+      if (monthKey !== currentMonth) {
+        currentMonth = monthKey;
+        groups.push({ type: 'month', label: monthKey.charAt(0).toUpperCase() + monthKey.slice(1) });
+      }
+      groups.push({ type: 'entry', entry });
+    }
+    return groups;
+  }
+
   $: totalEntries = entries.length;
   $: categoryCounts = entries.reduce((acc, e) => {
     const cat = e.category || 'Autre';
@@ -236,40 +255,64 @@
     <div class="empty-msg">Aucune entrée trouvée</div>
   {:else}
     <div class="timeline">
-      {#each filteredEntries as entry (entry.id)}
-        <div class="timeline-entry">
-          <div class="timeline-line">
-            <div class="timeline-dot" style="background: {getCategoryColor(entry.category)}; box-shadow: 0 0 8px {getCategoryColor(entry.category)}40"></div>
+      {#each groupedByMonth as item}
+        {#if item.type === 'month'}
+          <!-- Month separator -->
+          <div class="timeline-month-separator">
+            <div class="timeline-month-line"></div>
+            <span class="timeline-month-label">{item.label}</span>
+            <div class="timeline-month-line"></div>
           </div>
-          <div class="timeline-card">
-            <div class="timeline-card-header">
-              <div class="timeline-badges">
-                <span class="category-badge" style="background: {getCategoryColor(entry.category)}20; color: {getCategoryColor(entry.category)}; border: 1px solid {getCategoryColor(entry.category)}40">
-                  {entry.category || 'Autre'}
-                </span>
-                <span class="impact-badge" style="background: {getImpactInfo(entry.impact).color}20; color: {getImpactInfo(entry.impact).color}; border: 1px solid {getImpactInfo(entry.impact).color}40">
-                  {getImpactInfo(entry.impact).label}
-                </span>
+        {:else}
+          {@const entry = item.entry}
+          {@const impactInfo = getImpactInfo(entry.impact)}
+          {@const catColor = getCategoryColor(entry.category)}
+          <div class="timeline-entry">
+            <!-- Date column (left) -->
+            <div class="timeline-date-col">
+              <span class="timeline-day">{entry.event_date ? new Date(entry.event_date).getDate() : '—'}</span>
+              <span class="timeline-weekday">{entry.event_date ? new Date(entry.event_date).toLocaleDateString('fr-FR', {weekday: 'short'}) : ''}</span>
+            </div>
+            <!-- Center line + dot -->
+            <div class="timeline-line">
+              <div class="timeline-dot" style="background: {catColor}; box-shadow: 0 0 10px {catColor}50"></div>
+            </div>
+            <!-- Card -->
+            <div class="timeline-card" style="border-left: 3px solid {catColor}">
+              <div class="timeline-card-header">
+                <div class="timeline-badges">
+                  <span class="category-badge" style="background: {catColor}18; color: {catColor}; border: 1px solid {catColor}30">
+                    {entry.category || 'Autre'}
+                  </span>
+                  <span class="impact-badge" style="background: {impactInfo.color}18; color: {impactInfo.color}; border: 1px solid {impactInfo.color}30">
+                    {impactInfo.label}
+                  </span>
+                  {#if entry.tags}
+                    {#each entry.tags.split(',').map(t => t.trim()).filter(Boolean) as tag}
+                      <span class="tag-badge">{tag}</span>
+                    {/each}
+                  {/if}
+                </div>
+                <div class="timeline-actions">
+                  <button class="btn-icon" on:click={() => openEditDialog(entry)} title="Modifier">{'\u270F\uFE0F'}</button>
+                  <button class="btn-icon btn-icon-danger" on:click={() => { confirmDeleteId = entry.id; }} title="Supprimer">{'\u{1F5D1}\uFE0F'}</button>
+                </div>
               </div>
-              <div class="timeline-actions">
-                <button class="btn-icon" on:click={() => openEditDialog(entry)} title="Modifier">✏️</button>
-                <button class="btn-icon btn-icon-danger" on:click={() => { confirmDeleteId = entry.id; }} title="Supprimer">🗑️</button>
+              <h3 class="timeline-title">{entry.title}</h3>
+              {#if entry.description}
+                <p class="timeline-desc">{entry.description}</p>
+              {/if}
+              <div class="timeline-meta">
+                {#if entry.author}
+                  <span class="meta-item">{'\u{1F464}'} {entry.author}</span>
+                {/if}
+                {#if entry.event_date}
+                  <span class="meta-item">{'\u{1F4C5}'} {formatDate(entry.event_date)}</span>
+                {/if}
               </div>
             </div>
-            <h3 class="timeline-title">{entry.title}</h3>
-            {#if entry.description}
-              <p class="timeline-desc">{entry.description}</p>
-            {/if}
-            <div class="timeline-meta">
-              {#if entry.event_date}
-                <span class="meta-item">📅 {formatDate(entry.event_date)}</span>
-              {/if}
-              {#if entry.author}
-                <span class="meta-item">👤 {entry.author}</span>
-              {/if}
-            </div>
           </div>
-        </div>
+        {/if}
       {/each}
     </div>
   {/if}
@@ -496,19 +539,60 @@
   /* ── Timeline ───────────────────────────────────────────── */
   .timeline {
     position: relative;
-    padding-left: 24px;
+    padding: 0 0 20px;
+  }
+
+  /* Month separator */
+  .timeline-month-separator {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin: 24px 0 16px;
+  }
+  .timeline-month-separator:first-child { margin-top: 0; }
+  .timeline-month-line {
+    flex: 1; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border-subtle), transparent);
+  }
+  .timeline-month-label {
+    font-size: 13px; font-weight: 700; color: var(--accent);
+    text-transform: capitalize; letter-spacing: 0.5px;
+    white-space: nowrap;
+    padding: 4px 14px;
+    background: rgba(var(--accent-rgb), 0.08);
+    border: 1px solid rgba(var(--accent-rgb), 0.15);
+    border-radius: 20px;
   }
 
   .timeline-entry {
     display: flex;
-    gap: 16px;
-    margin-bottom: 16px;
+    gap: 12px;
+    margin-bottom: 12px;
     position: relative;
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  /* Date column on the left */
+  .timeline-date-col {
+    width: 50px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 10px;
+  }
+  .timeline-day {
+    font-size: 22px; font-weight: 800; color: var(--text-primary);
+    line-height: 1; font-variant-numeric: tabular-nums;
+  }
+  .timeline-weekday {
+    font-size: 10px; font-weight: 600; color: var(--text-muted);
+    text-transform: capitalize; margin-top: 2px;
   }
 
   .timeline-line {
     position: relative;
-    width: 16px;
+    width: 20px;
     flex-shrink: 0;
     display: flex;
     justify-content: center;
@@ -517,10 +601,10 @@
   .timeline-line::after {
     content: '';
     position: absolute;
-    top: 16px;
-    bottom: -16px;
+    top: 18px;
+    bottom: -12px;
     width: 2px;
-    background: var(--border-subtle);
+    background: linear-gradient(180deg, var(--border-subtle), rgba(255,255,255,0.03));
     left: 50%;
     transform: translateX(-50%);
   }
@@ -530,13 +614,14 @@
   }
 
   .timeline-dot {
-    width: 12px;
-    height: 12px;
+    width: 14px;
+    height: 14px;
     border-radius: 50%;
     flex-shrink: 0;
-    margin-top: 6px;
+    margin-top: 12px;
     position: relative;
     z-index: 1;
+    border: 2px solid rgba(0,0,0,0.3);
   }
 
   .timeline-card {
@@ -544,13 +629,22 @@
     background: var(--bg-card);
     border: 1px solid var(--border-subtle);
     border-radius: 12px;
-    padding: 16px 18px;
+    padding: 14px 18px;
     backdrop-filter: blur(16px);
-    transition: border-color 0.2s;
+    transition: all 0.2s;
+    min-width: 0;
   }
 
   .timeline-card:hover {
     border-color: var(--border-hover);
+    transform: translateX(3px);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+  }
+
+  .tag-badge {
+    font-size: 10px; padding: 1px 6px; border-radius: 4px;
+    background: rgba(255,255,255,0.06); color: var(--text-muted);
+    border: 1px solid rgba(255,255,255,0.06);
   }
 
   .timeline-card-header {
