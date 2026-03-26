@@ -26,7 +26,7 @@
   // ---------------------------------------------------------------------------
   // State
   // ---------------------------------------------------------------------------
-  let view = 'month'; // 'month' | 'week'
+  let view = 'month'; // 'month' | 'week' | 'day'
   let refDate = new Date();     // anchor date for navigation
   let events = [];
   let calendarTasks = [];
@@ -51,6 +51,7 @@
   $: viewMonth = refDate.getMonth();
   $: viewYear = refDate.getFullYear();
   $: monthLabel = `${MOIS_NOMS[viewMonth].charAt(0).toUpperCase() + MOIS_NOMS[viewMonth].slice(1)} ${viewYear}`;
+  $: dayLabel = refDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
   // Compute week range (Mon-Sun around refDate)
   $: weekStart = getWeekStart(refDate);
@@ -145,6 +146,9 @@
       const start = new Date(year, month - 1, 1);
       const end = new Date(year, month + 2, 0);
       return { start: toDateStr(start), end: toDateStr(end) };
+    } else if (v === 'day') {
+      const ds = toDateStr(refDate);
+      return { start: ds, end: ds };
     } else {
       const end = new Date(ws);
       end.setDate(end.getDate() + 6);
@@ -280,21 +284,17 @@
   // ---------------------------------------------------------------------------
   function prev() {
     const d = new Date(refDate);
-    if (view === 'month') {
-      d.setMonth(d.getMonth() - 1);
-    } else {
-      d.setDate(d.getDate() - 7);
-    }
+    if (view === 'month') d.setMonth(d.getMonth() - 1);
+    else if (view === 'day') d.setDate(d.getDate() - 1);
+    else d.setDate(d.getDate() - 7);
     refDate = d;
   }
 
   function next() {
     const d = new Date(refDate);
-    if (view === 'month') {
-      d.setMonth(d.getMonth() + 1);
-    } else {
-      d.setDate(d.getDate() + 7);
-    }
+    if (view === 'month') d.setMonth(d.getMonth() + 1);
+    else if (view === 'day') d.setDate(d.getDate() + 1);
+    else d.setDate(d.getDate() + 7);
     refDate = d;
   }
 
@@ -377,7 +377,9 @@
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
       </button>
       <button class="today-btn" on:click={goToday}>Aujourd'hui</button>
-      <h2 class="month-label">{monthLabel}</h2>
+      <h2 class="month-label">
+        {#if view === 'day'}{dayLabel}{:else}{monthLabel}{/if}
+      </h2>
     </div>
     <div class="view-controls">
       <div class="legend">
@@ -395,16 +397,9 @@
         </span>
       </div>
       <div class="segmented">
-        <button
-          class="seg-btn"
-          class:active={view === 'month'}
-          on:click={() => view = 'month'}
-        >Mois</button>
-        <button
-          class="seg-btn"
-          class:active={view === 'week'}
-          on:click={() => view = 'week'}
-        >Semaine</button>
+        <button class="seg-btn" class:active={view === 'month'} on:click={() => view = 'month'}>Mois</button>
+        <button class="seg-btn" class:active={view === 'week'} on:click={() => view = 'week'}>Semaine</button>
+        <button class="seg-btn" class:active={view === 'day'} on:click={() => view = 'day'}>Jour</button>
       </div>
     </div>
   </header>
@@ -453,7 +448,7 @@
         {/each}
       </div>
 
-    {:else}
+    {:else if view === 'week'}
       <!-- WEEK VIEW -->
       <div class="week-view">
         <!-- Header row -->
@@ -553,6 +548,78 @@
                 </div>
               {/each}
             </div>
+          </div>
+        </div>
+      </div>
+
+    {:else}
+      <!-- DAY VIEW -->
+      {@const dayStr = toDateStr(refDate)}
+      {@const dayEvents = getWeekDayEvents(dayStr)}
+      <div class="day-view">
+        <!-- All-day events -->
+        {#if dayEvents.allDay.length > 0}
+          <div class="day-allday-section">
+            <div class="day-section-label">Journ{'\u00e9'}e enti{'\u00e8'}re</div>
+            <div class="day-allday-list">
+              {#each dayEvents.allDay as evt}
+                <button
+                  class="event-chip"
+                  class:task-chip={evt._type === 'task'}
+                  style="--chip-color:{getEventColor(evt)}"
+                  on:click={() => openEditEvent(evt)}
+                >
+                  <span class="chip-text">{getEventLabel(evt)}</span>
+                </button>
+              {/each}
+            </div>
+          </div>
+        {/if}
+
+        <!-- Time grid (single column) -->
+        <div class="day-time-grid-scroll">
+          <div class="day-time-grid">
+            {#each HOURS as hour}
+              <div class="day-hour-row">
+                <div class="day-time-label">{String(hour).padStart(2,'0')}:00</div>
+                <!-- svelte-ignore a11y_click_events_have_key_events -->
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <div class="day-hour-slot" on:click={() => handleTimeSlotClick(dayStr, hour)}>
+                  {#each dayEvents.timed.filter(e => {
+                    const startH = timeToMinutes(e.time_start) / 60;
+                    return Math.floor(startH) === hour;
+                  }) as evt}
+                    {@const topPx = (timeToMinutes(evt.time_start) % 60) / 60 * 64}
+                    {@const endM = evt.time_end ? timeToMinutes(evt.time_end) : timeToMinutes(evt.time_start) + 60}
+                    {@const heightPx = Math.max((endM - timeToMinutes(evt.time_start)) / 60 * 64, 28)}
+                    <button
+                      class="day-timed-event"
+                      style="top:{topPx}px;height:{heightPx}px;--evt-color:{getEventColor(evt)}"
+                      on:click|stopPropagation={() => openEditEvent(evt)}
+                    >
+                      <div class="day-evt-time">{evt.time_start} - {evt.time_end || ''}</div>
+                      <div class="day-evt-title">{getEventLabel(evt)}</div>
+                      {#if evt.person}<div class="day-evt-person">{'\u{1F464}'} {evt.person}</div>{/if}
+                    </button>
+                  {/each}
+                </div>
+              </div>
+              <!-- Half-hour line -->
+              <div class="day-hour-row day-half-row">
+                <div class="day-time-label half-label">
+                  {String(hour).padStart(2,'0')}:30
+                </div>
+                <div class="day-hour-half-line"></div>
+              </div>
+            {/each}
+
+            <!-- Current time indicator -->
+            {#if dayStr === today}
+              <div class="day-now-indicator" style="top:{(nowMinutes / 60) * 128}px">
+                <div class="day-now-dot"></div>
+                <div class="day-now-line"></div>
+              </div>
+            {/if}
           </div>
         </div>
       </div>
@@ -1184,6 +1251,84 @@
     left: -5px;
     top: -6px;
     box-shadow: 0 0 6px rgba(239, 68, 68, 0.5);
+  }
+
+  /* =========================================================================
+     Day View
+     ========================================================================= */
+  .day-view {
+    flex: 1; display: flex; flex-direction: column; min-height: 0;
+  }
+  .day-allday-section {
+    padding: 10px 16px; border-bottom: 1px solid var(--border-subtle);
+    background: rgba(255,255,255,0.01);
+  }
+  .day-section-label {
+    font-size: 11px; font-weight: 600; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;
+  }
+  .day-allday-list { display: flex; gap: 6px; flex-wrap: wrap; }
+
+  .day-time-grid-scroll {
+    flex: 1; overflow-y: auto; min-height: 0;
+  }
+  .day-time-grid {
+    position: relative;
+  }
+  .day-hour-row {
+    display: flex; align-items: stretch;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    min-height: 64px; position: relative;
+  }
+  .day-half-row {
+    min-height: 0; border-bottom: 1px dashed rgba(255,255,255,0.03);
+  }
+  .day-time-label {
+    width: 60px; flex-shrink: 0; font-size: 12px; font-weight: 500;
+    color: var(--text-muted); text-align: right; padding: 8px 10px 0 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .half-label { font-size: 10px; color: rgba(255,255,255,0.15); padding-top: 4px; }
+  .day-hour-slot {
+    flex: 1; position: relative; cursor: pointer;
+    transition: background 0.1s; min-height: 64px;
+    border-left: 1px solid rgba(255,255,255,0.04);
+  }
+  .day-hour-slot:hover { background: rgba(255,255,255,0.02); }
+  .day-hour-half-line {
+    flex: 1; border-left: 1px solid rgba(255,255,255,0.04);
+    min-height: 8px;
+  }
+
+  .day-timed-event {
+    position: absolute; left: 8px; right: 8px;
+    border-radius: 8px; padding: 6px 10px;
+    cursor: pointer; font-family: inherit; border: none;
+    border-left: 4px solid var(--evt-color);
+    background: color-mix(in srgb, var(--evt-color) 12%, transparent);
+    transition: all 0.15s; z-index: 1; overflow: hidden;
+    display: flex; flex-direction: column; gap: 2px; text-align: left;
+  }
+  .day-timed-event:hover {
+    background: color-mix(in srgb, var(--evt-color) 20%, transparent);
+    box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+    z-index: 2;
+  }
+  .day-evt-time { font-size: 11px; font-weight: 600; color: var(--text-primary); }
+  .day-evt-title { font-size: 13px; font-weight: 500; color: var(--text-primary); }
+  .day-evt-person { font-size: 11px; color: var(--text-muted); }
+
+  /* Day current time */
+  .day-now-indicator {
+    position: absolute; left: 60px; right: 0; z-index: 5; pointer-events: none;
+    display: flex; align-items: center;
+  }
+  .day-now-dot {
+    width: 12px; height: 12px; background: #EF4444; border-radius: 50%;
+    box-shadow: 0 0 8px rgba(239,68,68,0.5); flex-shrink: 0; margin-left: -6px;
+  }
+  .day-now-line {
+    flex: 1; height: 2px; background: #EF4444;
   }
 
   /* =========================================================================
