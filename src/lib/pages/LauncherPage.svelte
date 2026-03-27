@@ -5,38 +5,35 @@
 
   const API = 'http://localhost:8010/api/launcher';
 
-  // Predefined icon/logo suggestions for common services
+  // Simple Icons CDN for tech brand logos (white SVG on transparent)
+  const SI = (name) => `https://cdn.simpleicons.org/${name}/white`;
+
+  // Predefined presets with real logos
   const PRESETS = [
-    { name: 'Google', icon: '🔍', color: '#4285F4', url: 'https://google.com' },
-    { name: 'Gmail', icon: '📧', color: '#EA4335', url: 'https://mail.google.com' },
-    { name: 'Google Admin', icon: '🔧', color: '#4285F4', url: 'https://admin.google.com' },
-    { name: 'Zyxel Nebula', icon: '📡', color: '#FF6600', url: 'https://nebula.zyxel.com' },
-    { name: 'GLPI', icon: '🖥️', color: '#6C63FF', url: '' },
-    { name: 'Windows Admin', icon: '🪟', color: '#0078D4', url: '' },
-    { name: 'Active Directory', icon: '🏢', color: '#0078D4', url: '' },
-    { name: 'WithSecure', icon: '🛡️', color: '#2D6CDF', url: 'https://elements.withsecure.com' },
-    { name: 'GitHub', icon: '🐙', color: '#333333', url: 'https://github.com' },
-    { name: 'Office 365', icon: '📋', color: '#D83B01', url: 'https://portal.office.com' },
-    { name: 'Azure Portal', icon: '☁️', color: '#0089D6', url: 'https://portal.azure.com' },
-    { name: 'OVH', icon: '🌐', color: '#123F6D', url: 'https://www.ovh.com/manager' },
-    { name: 'Zabbix', icon: '📊', color: '#D40000', url: '' },
+    { name: 'Google', logo: SI('google'), color: '#4285F4', url: 'https://google.com' },
+    { name: 'Gmail', logo: SI('gmail'), color: '#EA4335', url: 'https://mail.google.com' },
+    { name: 'Google Admin', logo: SI('googlecloud'), color: '#4285F4', url: 'https://admin.google.com' },
+    { name: 'Zyxel Nebula', logo: SI('zyxel'), color: '#FF6600', url: 'https://nebula.zyxel.com' },
+    { name: 'GLPI', logo: 'https://glpi-project.org/wp-content/uploads/2024/04/glpi-favicon.png', color: '#6C63FF', url: '' },
+    { name: 'Windows', logo: SI('windows'), color: '#0078D4', url: '' },
+    { name: 'Active Directory', logo: SI('microsoftazure'), color: '#0078D4', url: '' },
+    { name: 'WithSecure', logo: SI('withsecure'), color: '#2D6CDF', url: 'https://elements.withsecure.com' },
+    { name: 'GitHub', logo: SI('github'), color: '#6e40c9', url: 'https://github.com' },
+    { name: 'Office 365', logo: SI('microsoft365'), color: '#D83B01', url: 'https://portal.office.com' },
+    { name: 'Azure Portal', logo: SI('microsoftazure'), color: '#0089D6', url: 'https://portal.azure.com' },
+    { name: 'OVH', logo: SI('ovh'), color: '#123F6D', url: 'https://www.ovh.com/manager' },
+    { name: 'Zabbix', logo: SI('zabbix'), color: '#D40000', url: '' },
+    { name: 'Grafana', logo: SI('grafana'), color: '#F46800', url: '' },
+    { name: 'Proxmox', logo: SI('proxmox'), color: '#E57000', url: '' },
+    { name: 'VMware', logo: SI('vmware'), color: '#607078', url: '' },
+    { name: 'Nextcloud', logo: SI('nextcloud'), color: '#0082C9', url: '' },
+    { name: 'pfSense', logo: SI('pfsense'), color: '#212121', url: '' },
   ];
 
-  // Get favicon URL from a site URL
-  function getFaviconUrl(siteUrl, size = 64) {
-    try {
-      const domain = new URL(siteUrl).hostname;
-      return `https://www.google.com/s2/favicons?domain=${domain}&sz=${size}`;
-    } catch { return null; }
-  }
-
-  // Auto-detect: use favicon if URL is set, otherwise emoji
+  // Icon display logic
   function getIconDisplay(link) {
-    if (link.icon_type === 'emoji') return { type: 'emoji', value: link.icon_value };
-    if (link.icon_type === 'favicon' && link.icon_value) return { type: 'img', value: link.icon_value };
-    // Auto: try favicon from URL
-    const fav = getFaviconUrl(link.url, 64);
-    if (fav) return { type: 'img', value: fav };
+    if (link.icon_type === 'emoji') return { type: 'emoji', value: link.icon_value || '🔗' };
+    if (link.icon_type === 'url' && link.icon_value) return { type: 'img', value: link.icon_value };
     return { type: 'emoji', value: link.icon_value || '🔗' };
   }
 
@@ -60,7 +57,7 @@
   let confirmDeleteId = null;
 
   function defaultForm() {
-    return { name: '', url: 'https://', description: '', category: '', icon_type: 'auto', icon_value: '🔗', color: '#6C63FF', favorite: false, sort_order: 100 };
+    return { name: '', url: 'https://', description: '', category: '', icon_type: 'emoji', icon_value: '🔗', color: '#6C63FF', favorite: false, sort_order: 100 };
   }
 
   $: filteredLinks = links.filter(l => {
@@ -118,7 +115,8 @@
 
   function applyPreset(preset) {
     form.name = preset.name;
-    form.icon_value = preset.icon;
+    form.icon_type = 'url';
+    form.icon_value = preset.logo;
     form.color = preset.color;
     if (preset.url) form.url = preset.url;
     showPresets = false;
@@ -278,7 +276,9 @@
             <div class="presets-grid">
               {#each PRESETS as preset}
                 <button class="preset-btn" on:click={() => applyPreset(preset)} style="border-color:{preset.color}33">
-                  <span class="preset-icon" style="background:{preset.color}22">{preset.icon}</span>
+                  <span class="preset-icon" style="background:{preset.color}22">
+                    <img src={preset.logo} alt="" class="preset-logo" />
+                  </span>
                   <span class="preset-name">{preset.name}</span>
                 </button>
               {/each}
@@ -330,8 +330,8 @@
           <label class="form-label form-half">
             Ic{'\u00f4'}ne
             <div class="icon-type-toggle">
-              <button class="icon-type-btn" class:active={form.icon_type === 'auto'} on:click={() => form.icon_type = 'auto'}>
-                {'\u{1F310}'} Logo auto
+              <button class="icon-type-btn" class:active={form.icon_type === 'url'} on:click={() => form.icon_type = 'url'}>
+                {'\u{1F5BC}\uFE0F'} Logo
               </button>
               <button class="icon-type-btn" class:active={form.icon_type === 'emoji'} on:click={() => form.icon_type = 'emoji'}>
                 {'\u{1F600}'} Emoji
@@ -344,12 +344,15 @@
                 {/each}
               </div>
             {:else}
-              <p class="icon-auto-hint">Le logo sera r{'\u00e9'}cup{'\u00e9'}r{'\u00e9'} automatiquement depuis l'URL du site</p>
-              {#if form.url && form.url !== 'https://'}
+              <input type="text" class="form-input" bind:value={form.icon_value}
+                placeholder="URL du logo (ex: https://...logo.png)" style="margin-top:4px;font-size:11px" />
+              {#if form.icon_value && form.icon_value.startsWith('http')}
                 <div class="icon-auto-preview">
-                  <img src={getFaviconUrl(form.url, 64)} alt="favicon" class="favicon-preview" />
-                  <span class="favicon-domain">{(() => { try { return new URL(form.url).hostname; } catch { return ''; } })()}</span>
+                  <img src={form.icon_value} alt="logo" class="favicon-preview" />
+                  <span class="favicon-domain">Aper{'\u00e7'}u du logo</span>
                 </div>
+              {:else}
+                <p class="icon-auto-hint">Collez l'URL d'une image ou choisissez un mod{'\u00e8'}le ci-dessus</p>
               {/if}
             {/if}
           </label>
@@ -528,7 +531,8 @@
     cursor: pointer; font-family: inherit; font-size: 12px; color: var(--text-primary); transition: all 0.15s;
   }
   .preset-btn:hover { background: rgba(255,255,255,0.08); }
-  .preset-icon { width: 24px; height: 24px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+  .preset-icon { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+  .preset-logo { width: 18px; height: 18px; object-fit: contain; }
   .preset-name { font-weight: 500; }
 
   /* Preview */
