@@ -287,14 +287,13 @@
         {/if}
 
         <!-- Preview -->
-        {@const previewIco = getIconDisplay(form)}
         <div class="form-preview">
           <div class="preview-card" style="border-color:{form.color}30">
             <div class="preview-icon" style="background:{form.color}22">
-              {#if previewIco.type === 'img'}
-                <img src={previewIco.value} alt="" class="preview-icon-img" />
+              {#if getIconDisplay(form).type === 'img'}
+                <img src={getIconDisplay(form).value} alt="" class="preview-icon-img" />
               {:else}
-                {previewIco.value}
+                {getIconDisplay(form).value}
               {/if}
             </div>
             <div>
