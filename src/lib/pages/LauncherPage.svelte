@@ -10,7 +10,7 @@
     { name: 'Google', icon: '🔍', color: '#4285F4', url: 'https://google.com' },
     { name: 'Gmail', icon: '📧', color: '#EA4335', url: 'https://mail.google.com' },
     { name: 'Google Admin', icon: '🔧', color: '#4285F4', url: 'https://admin.google.com' },
-    { name: 'Zyxel Nebula', icon: '📡', color: '#FF6600', url: '' },
+    { name: 'Zyxel Nebula', icon: '📡', color: '#FF6600', url: 'https://nebula.zyxel.com' },
     { name: 'GLPI', icon: '🖥️', color: '#6C63FF', url: '' },
     { name: 'Windows Admin', icon: '🪟', color: '#0078D4', url: '' },
     { name: 'Active Directory', icon: '🏢', color: '#0078D4', url: '' },
@@ -21,6 +21,24 @@
     { name: 'OVH', icon: '🌐', color: '#123F6D', url: 'https://www.ovh.com/manager' },
     { name: 'Zabbix', icon: '📊', color: '#D40000', url: '' },
   ];
+
+  // Get favicon URL from a site URL
+  function getFaviconUrl(siteUrl, size = 64) {
+    try {
+      const domain = new URL(siteUrl).hostname;
+      return `https://www.google.com/s2/favicons?domain=${domain}&sz=${size}`;
+    } catch { return null; }
+  }
+
+  // Auto-detect: use favicon if URL is set, otherwise emoji
+  function getIconDisplay(link) {
+    if (link.icon_type === 'emoji') return { type: 'emoji', value: link.icon_value };
+    if (link.icon_type === 'favicon' && link.icon_value) return { type: 'img', value: link.icon_value };
+    // Auto: try favicon from URL
+    const fav = getFaviconUrl(link.url, 64);
+    if (fav) return { type: 'img', value: fav };
+    return { type: 'emoji', value: link.icon_value || '🔗' };
+  }
 
   const CATEGORIES = ['Administration', 'Réseau', 'Cloud', 'Sécurité', 'Outils', 'Supervision', 'Communication', 'Autre'];
   const EMOJI_PALETTE = ['🔗','🌐','🖥️','📡','🛡️','🔧','📧','📋','☁️','🏢','🔍','📊','🐙','🪟','💾','📁','🔒','📞','🖨️','⚡'];
@@ -42,7 +60,7 @@
   let confirmDeleteId = null;
 
   function defaultForm() {
-    return { name: '', url: 'https://', description: '', category: '', icon_type: 'emoji', icon_value: '🔗', color: '#6C63FF', favorite: false, sort_order: 100 };
+    return { name: '', url: 'https://', description: '', category: '', icon_type: 'auto', icon_value: '🔗', color: '#6C63FF', favorite: false, sort_order: 100 };
   }
 
   $: filteredLinks = links.filter(l => {
@@ -170,10 +188,15 @@
         <h2 class="section-title">{'\u2B50'} Favoris</h2>
         <div class="links-grid fav-grid">
           {#each favorites as link}
+            {@const ico = getIconDisplay(link)}
             <button class="link-card fav-card" on:click={() => openLink(link)}>
               <div class="card-glow" style="background:{link.color}"></div>
               <div class="card-icon" style="background:{link.color}22; border-color:{link.color}44">
-                <span class="icon-display">{link.icon_value}</span>
+                {#if ico.type === 'img'}
+                  <img src={ico.value} alt="" class="icon-img" />
+                {:else}
+                  <span class="icon-display">{ico.value}</span>
+                {/if}
               </div>
               <span class="card-name">{link.name}</span>
             </button>
@@ -189,11 +212,16 @@
         <div class="links-grid">
           {#each catLinks as link}
             <!-- svelte-ignore a11y_no_static_element_interactions -->
+            {@const ico2 = getIconDisplay(link)}
             <div class="link-card" on:click={() => openLink(link)}>
               <div class="card-glow" style="background:{link.color}"></div>
               <div class="card-top">
                 <div class="card-icon-lg" style="background:{link.color}15; border-color:{link.color}30">
-                  <span class="icon-lg">{link.icon_value}</span>
+                  {#if ico2.type === 'img'}
+                    <img src={ico2.value} alt="" class="icon-img-lg" />
+                  {:else}
+                    <span class="icon-lg">{ico2.value}</span>
+                  {/if}
                 </div>
                 <div class="card-actions" on:click|stopPropagation>
                   <button class="card-btn" class:fav-active={link.favorite} on:click={() => toggleFavorite(link)} title="Favori">{'\u2B50'}</button>
@@ -259,9 +287,16 @@
         {/if}
 
         <!-- Preview -->
+        {@const previewIco = getIconDisplay(form)}
         <div class="form-preview">
           <div class="preview-card" style="border-color:{form.color}30">
-            <div class="preview-icon" style="background:{form.color}22">{form.icon_value}</div>
+            <div class="preview-icon" style="background:{form.color}22">
+              {#if previewIco.type === 'img'}
+                <img src={previewIco.value} alt="" class="preview-icon-img" />
+              {:else}
+                {previewIco.value}
+              {/if}
+            </div>
             <div>
               <strong>{form.name || 'Nom du lien'}</strong>
               <span class="preview-url">{form.url || 'https://...'}</span>
@@ -295,11 +330,29 @@
           </label>
           <label class="form-label form-half">
             Ic{'\u00f4'}ne
-            <div class="emoji-picker">
-              {#each EMOJI_PALETTE as emoji}
-                <button class="emoji-btn" class:emoji-selected={form.icon_value === emoji} on:click={() => form.icon_value = emoji}>{emoji}</button>
-              {/each}
+            <div class="icon-type-toggle">
+              <button class="icon-type-btn" class:active={form.icon_type === 'auto'} on:click={() => form.icon_type = 'auto'}>
+                {'\u{1F310}'} Logo auto
+              </button>
+              <button class="icon-type-btn" class:active={form.icon_type === 'emoji'} on:click={() => form.icon_type = 'emoji'}>
+                {'\u{1F600}'} Emoji
+              </button>
             </div>
+            {#if form.icon_type === 'emoji'}
+              <div class="emoji-picker">
+                {#each EMOJI_PALETTE as emoji}
+                  <button class="emoji-btn" class:emoji-selected={form.icon_value === emoji} on:click={() => form.icon_value = emoji}>{emoji}</button>
+                {/each}
+              </div>
+            {:else}
+              <p class="icon-auto-hint">Le logo sera r{'\u00e9'}cup{'\u00e9'}r{'\u00e9'} automatiquement depuis l'URL du site</p>
+              {#if form.url && form.url !== 'https://'}
+                <div class="icon-auto-preview">
+                  <img src={getFaviconUrl(form.url, 64)} alt="favicon" class="favicon-preview" />
+                  <span class="favicon-domain">{(() => { try { return new URL(form.url).hostname; } catch { return ''; } })()}</span>
+                </div>
+              {/if}
+            {/if}
           </label>
         </div>
 
@@ -507,4 +560,28 @@
   }
   .color-btn:hover { transform: scale(1.15); }
   .color-btn.color-selected { border-color: #fff; box-shadow: 0 0 8px rgba(255,255,255,0.3); transform: scale(1.15); }
+
+  /* Favicon / logo images */
+  .icon-img { width: 28px; height: 28px; object-fit: contain; border-radius: 4px; }
+  .icon-img-lg { width: 32px; height: 32px; object-fit: contain; border-radius: 6px; }
+  .preview-icon-img { width: 24px; height: 24px; object-fit: contain; border-radius: 4px; }
+
+  /* Icon type toggle */
+  .icon-type-toggle { display: flex; gap: 4px; margin-top: 4px; }
+  .icon-type-btn {
+    flex: 1; padding: 5px 8px; font-size: 11px; border: 1px solid var(--border-subtle);
+    border-radius: 6px; background: transparent; color: var(--text-secondary);
+    cursor: pointer; font-family: inherit; transition: all 0.15s; text-align: center;
+  }
+  .icon-type-btn:hover { background: rgba(255,255,255,0.05); }
+  .icon-type-btn.active {
+    background: rgba(var(--accent-rgb), 0.15); border-color: var(--accent); color: var(--accent);
+  }
+  .icon-auto-hint { font-size: 11px; color: var(--text-muted); margin: 6px 0 0; }
+  .icon-auto-preview {
+    display: flex; align-items: center; gap: 8px; margin-top: 6px;
+    padding: 6px 10px; background: rgba(255,255,255,0.03); border-radius: 6px;
+  }
+  .favicon-preview { width: 32px; height: 32px; border-radius: 6px; }
+  .favicon-domain { font-size: 12px; color: var(--text-secondary); }
 </style>
