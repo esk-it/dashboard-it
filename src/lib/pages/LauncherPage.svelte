@@ -30,10 +30,15 @@
     { name: 'pfSense', logo: SI('pfsense'), color: '#212121', url: '' },
   ];
 
-  // Icon display logic
+  // Icon display logic — local icons served from backend
   function getIconDisplay(link) {
+    if (link.icon_type === 'local') {
+      return { type: 'img', value: `http://localhost:8010/api/launcher/${link.id}/icon` };
+    }
+    if (link.icon_type === 'url' && link.icon_value) {
+      return { type: 'img', value: link.icon_value };
+    }
     if (link.icon_type === 'emoji') return { type: 'emoji', value: link.icon_value || '🔗' };
-    if (link.icon_type === 'url' && link.icon_value) return { type: 'img', value: link.icon_value };
     return { type: 'emoji', value: link.icon_value || '🔗' };
   }
 
@@ -125,12 +130,19 @@
   async function saveLink() {
     if (!form.name.trim() || !form.url.trim()) return;
     try {
+      let savedLink;
       if (editingLink) {
-        await api.put(`/api/launcher/${editingLink.id}`, form);
-        success('Lien modifié');
+        savedLink = await api.put(`/api/launcher/${editingLink.id}`, form);
+        success('Lien modifi\u00e9');
       } else {
-        await api.post('/api/launcher', form);
-        success('Lien créé');
+        savedLink = await api.post('/api/launcher', form);
+        success('Lien cr\u00e9\u00e9');
+      }
+      // If icon_type is 'url', download icon locally for offline use
+      if (form.icon_type === 'url' && form.icon_value && form.icon_value.startsWith('http')) {
+        try {
+          await api.post(`/api/launcher/${savedLink.id}/icon`, { url: form.icon_value });
+        } catch { /* icon download failed, will use emoji fallback */ }
       }
       showDialog = false;
       await loadLinks();

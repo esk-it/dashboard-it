@@ -1,12 +1,26 @@
 """Quick Links / Launcher module — manage and display shortcut links."""
 from __future__ import annotations
 
+import logging
+import os
 from datetime import datetime
+from pathlib import Path
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from ..database import get_raw_db
+
+logger = logging.getLogger(__name__)
+
+# Icons storage directory
+if os.environ.get("ITMANAGER_DATA_DIR"):
+    ICONS_DIR = Path(os.environ["ITMANAGER_DATA_DIR"]) / "data" / "launcher_icons"
+else:
+    ICONS_DIR = Path(__file__).parent.parent / "data" / "launcher_icons"
+ICONS_DIR.mkdir(parents=True, exist_ok=True)
 
 router = APIRouter(prefix="/api/launcher", tags=["launcher"])
 
@@ -97,3 +111,61 @@ async def delete_link(link_id: int, db=Depends(get_raw_db)):
 async def list_categories(db=Depends(get_raw_db)):
     rows = await db.execute_fetchall("SELECT DISTINCT category FROM quick_links WHERE category != '' ORDER BY category")
     return [r[0] for r in rows]
+
+
+# ── Icon management (local storage) ──────────────────────────
+
+@router.post("/{link_id}/icon")
+async def download_icon(link_id: int, body: dict, db=Depends(get_raw_db)):
+    """Download an icon from a URL and store it locally."""
+    icon_url = body.get("url", "").strip()
+    if not icon_url:
+        raise HTTPException(400, "url required")
+
+    try:
+        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+            resp = await client.get(icon_url)
+            resp.raise_for_status()
+            content = resp.content
+            # Detect extension from content-type
+            ct = resp.headers.get("content-type", "")
+            if "svg" in ct:
+                ext = ".svg"
+            elif "png" in ct:
+                ext = ".png"
+            elif "jpeg" in ct or "jpg" in ct:
+                ext = ".jpg"
+            elif "webp" in ct:
+                ext = ".webp"
+            elif "ico" in ct:
+                ext = ".ico"
+            else:
+                ext = ".png"  # default
+
+            icon_path = ICONS_DIR / f"{link_id}{ext}"
+            icon_path.write_bytes(content)
+
+            # Update DB to use local icon
+            await db.execute(
+                "UPDATE quick_links SET icon_type='local', icon_value=? WHERE id=?",
+                (f"{link_id}{ext}", link_id),
+            )
+            await db.commit()
+
+            return {"status": "ok", "icon_file": f"{link_id}{ext}"}
+    except Exception as e:
+        logger.warning(f"Failed to download icon: {e}")
+        raise HTTPException(502, f"Failed to download icon: {e}")
+
+
+@router.get("/{link_id}/icon")
+async def get_icon(link_id: int, db=Depends(get_raw_db)):
+    """Serve a locally stored icon."""
+    # Find the icon file
+    for ext in [".svg", ".png", ".jpg", ".webp", ".ico"]:
+        icon_path = ICONS_DIR / f"{link_id}{ext}"
+        if icon_path.exists():
+            media = {".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg",
+                     ".webp": "image/webp", ".ico": "image/x-icon"}
+            return FileResponse(icon_path, media_type=media.get(ext, "image/png"))
+    raise HTTPException(404, "Icon not found")
