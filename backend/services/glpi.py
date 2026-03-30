@@ -230,8 +230,8 @@ def _map_item(raw: dict, item_type: str, lookups: dict) -> dict:
             return lookups.get(lookup_name, {}).get(val, "")
         return ""
 
-    name = raw.get("name", "")
-    serial = raw.get("serial", "")
+    name = raw.get("name", "") or ""
+    serial = raw.get("serial", "") or ""
 
     # OS — resolved via Item_OperatingSystem lookup (populated in fetch_all)
     os_val = ""
@@ -263,17 +263,17 @@ def _map_item(raw: dict, item_type: str, lookups: dict) -> dict:
         user_val = lookups.get("_users", {}).get(users_id, "")
 
     return {
-        "hostname": name,
+        "hostname": name or "",
         "equip_type": _TYPE_MAP.get(item_type, "PC"),
-        "os": os_val,
-        "serial_number": serial,
-        "brand": brand,
-        "model": model,
+        "os": os_val or "",
+        "serial_number": serial or "",
+        "brand": brand or "",
+        "model": model or "",
         "source": "glpi",
         "glpi_id": raw.get("id"),
-        "glpi_location": location,
+        "glpi_location": location or "",
         "glpi_locations_id": locations_id if isinstance(locations_id, int) and locations_id > 0 else None,
-        "last_user": user_val,
+        "last_user": user_val or "",
     }
 
 
