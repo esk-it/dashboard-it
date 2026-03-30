@@ -13,6 +13,7 @@
   import QuickLinksCard from '../components/cards/QuickLinksCard.svelte';
   import WeatherCard from '../components/cards/WeatherCard.svelte';
   import ActivityCard from '../components/cards/ActivityCard.svelte';
+  import LauncherFavCard from '../components/cards/LauncherFavCard.svelte';
 
   const JOURS = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
   const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'ao\u00fbt', 'septembre', 'octobre', 'novembre', 'décembre'];
@@ -31,6 +32,7 @@
     { id: 'quicklinks', label: 'Acc\u00e8s rapides', emoji: '\u26A1' },
     // Weather is shown in the header, not as a widget
     { id: 'activity', label: 'Activit\u00e9 r\u00e9cente', emoji: '\u{1F553}' },
+    { id: 'launcher', label: 'Liens favoris', emoji: '\u{1F680}' },
   ];
 
   const SIZE_LABELS = { 1: '1/3', 2: '1/2', 3: 'Pleine' };
@@ -178,6 +180,7 @@
   let donutChart;
   let weatherCard;
   let activityCard;
+  let launcherFavCard;
 
   $: greeting = getGreeting();
   $: username = $settings.username || 'Utilisateur';
@@ -220,6 +223,7 @@
     if (donutChart?.refresh) donutChart.refresh();
     if (weatherCard?.refresh) weatherCard.refresh();
     if (activityCard?.refresh) activityCard.refresh();
+    if (launcherFavCard?.refresh) launcherFavCard.refresh();
     success('Donn\u00e9es actualis\u00e9es');
   }
 
@@ -386,6 +390,7 @@
         {:else if wc.id === 'donut'}<DonutChart bind:this={donutChart} />
         {:else if wc.id === 'quicklinks'}<QuickLinksCard />
         {:else if wc.id === 'activity'}<ActivityCard bind:this={activityCard} />
+        {:else if wc.id === 'launcher'}<LauncherFavCard bind:this={launcherFavCard} />
         {/if}
       </div>
     {/each}

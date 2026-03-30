@@ -13,7 +13,7 @@
       const { getVersion } = await import('@tauri-apps/api/app');
       appVersion = await getVersion();
     } catch {
-      appVersion = '3.9.3';
+      appVersion = '3.9.4';
     }
     loadOverdueCount();
     interval = setInterval(loadOverdueCount, 60000);
