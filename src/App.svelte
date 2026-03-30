@@ -7,6 +7,7 @@
   import Sidebar from './lib/components/Sidebar.svelte';
   import Toast from './lib/components/Toast.svelte';
   import SearchPalette from './lib/components/SearchPalette.svelte';
+  import QuickCreate from './lib/components/QuickCreate.svelte';
   import HomePage from './lib/pages/HomePage.svelte';
   import PlaceholderPage from './lib/pages/PlaceholderPage.svelte';
   import PlanningPage from './lib/pages/PlanningPage.svelte';
@@ -24,10 +25,21 @@
   import SettingsPage from './lib/pages/SettingsPage.svelte';
 
   let showSearch = false;
+  let showQuickCreate = false;
   let splashDone = false;
 
   // Reload settings after splash is done (backend is ready by then)
   $: if (splashDone) loadSettings();
+
+  // Warn before closing if a form might be open (global beforeunload)
+  function handleBeforeUnload(e) {
+    // Check if any dialog/modal is open by looking for overlay elements
+    const hasOpenDialog = document.querySelector('.dialog-overlay, .modal-overlay');
+    if (hasOpenDialog) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  }
 
   onMount(() => {
     loadSettings();
@@ -37,10 +49,20 @@
         e.preventDefault();
         showSearch = !showSearch;
       }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+        // Don't override browser new window if not in Tauri
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+        e.preventDefault();
+        showQuickCreate = !showQuickCreate;
+      }
     }
 
     window.addEventListener('keydown', handleKeydown);
-    return () => window.removeEventListener('keydown', handleKeydown);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('keydown', handleKeydown);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
   });
 </script>
 
@@ -93,6 +115,9 @@
 
 {#if showSearch}
   <SearchPalette on:close={() => showSearch = false} />
+{/if}
+{#if showQuickCreate}
+  <QuickCreate on:close={() => showQuickCreate = false} />
 {/if}
 {/if}
 

@@ -13,7 +13,7 @@
       const { getVersion } = await import('@tauri-apps/api/app');
       appVersion = await getVersion();
     } catch {
-      appVersion = '3.9.4';
+      appVersion = '4.0.0';
     }
     loadOverdueCount();
     interval = setInterval(loadOverdueCount, 60000);
@@ -209,6 +209,18 @@
   .nav-item.active {
     background: rgba(var(--accent-rgb), 0.15);
     box-shadow: 0 0 12px rgba(var(--accent-rgb), 0.2);
+  }
+
+  .nav-item.active::before {
+    content: '';
+    position: absolute;
+    left: -8px;
+    top: 4px;
+    bottom: 4px;
+    width: 3px;
+    background: var(--accent);
+    border-radius: 0 3px 3px 0;
+    box-shadow: 0 0 8px rgba(var(--accent-rgb), 0.5);
   }
 
   .nav-item.active .nav-emoji {
