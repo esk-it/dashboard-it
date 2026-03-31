@@ -3,10 +3,10 @@
   import { currentPage, navItems } from '../stores/navigation.js';
   import logoUrl from '../../assets/logo.png';
 
-  let hovered = false;
   let appVersion = '';
   let overdueCount = 0;
   let interval;
+  let collapsed = false;
 
   onMount(async () => {
     try {
@@ -34,202 +34,236 @@
     currentPage.set(path);
   }
 
-  $: mainItems = navItems.filter(item => item.type === 'separator' || !item.bottom);
+  // Split nav items into sections
+  $: topItems = navItems.filter(item => !item.bottom && item.type !== 'separator' && ['home','news','planning','tasks','documents'].includes(item.key));
+  $: moduleItems = navItems.filter(item => !item.bottom && item.type !== 'separator' && ['suppliers','parc','security','wiki','changelog','monitoring','launcher'].includes(item.key));
   $: bottomItems = navItems.filter(item => item.bottom);
 </script>
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<aside
-  class="sidebar"
-  class:expanded={hovered}
-  on:mouseenter={() => hovered = true}
-  on:mouseleave={() => hovered = false}
->
-  <div class="sidebar-inner">
-    <!-- Brand -->
-    <div class="brand">
-      <img src={logoUrl} alt="Logo" class="brand-logo" />
-      {#if hovered}
-        <span class="brand-text">ITManager</span>
-      {/if}
-    </div>
-
-    <!-- Main nav -->
-    <nav class="nav-main">
-      {#each mainItems as item}
-        {#if item.type === 'separator'}
-          <div class="separator"></div>
+<aside class="sidebar" class:collapsed>
+  <!-- Brand header -->
+  <div class="brand">
+    <img src={logoUrl} alt="Logo" class="brand-logo" />
+    {#if !collapsed}
+      <span class="brand-name">ITManager</span>
+    {/if}
+    <button class="collapse-btn" on:click={() => collapsed = !collapsed}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        {#if collapsed}
+          <polyline points="9 18 15 12 9 6"/>
         {:else}
-          <!-- svelte-ignore a11y_click_events_have_key_events -->
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <div
-            class="nav-item"
-            class:active={$currentPage === item.path}
-            title={hovered ? '' : item.label}
-            on:click={() => navigate(item.path)}
-          >
-            <span class="nav-emoji">{item.emoji}</span>
-            {#if hovered}
-              <span class="nav-label">{item.label}</span>
-            {/if}
-            {#if item.key === 'tasks' && overdueCount > 0}
-              <span class="overdue-badge">{overdueCount}</span>
-            {/if}
-          </div>
+          <polyline points="15 18 9 12 15 6"/>
         {/if}
-      {/each}
-    </nav>
+      </svg>
+    </button>
+  </div>
 
-    <!-- Bottom nav -->
-    <nav class="nav-bottom">
-      {#each bottomItems as item}
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div
-          class="nav-item"
-          class:active={$currentPage === item.path}
-          title={hovered ? '' : item.label}
-          on:click={() => navigate(item.path)}
-        >
-          <span class="nav-emoji">{item.emoji}</span>
-          {#if hovered}
-            <span class="nav-label">{item.label}</span>
-          {/if}
-        </div>
-      {/each}
-
-      <!-- Version -->
-      <div class="version">
-        {#if hovered}
-          <span>v{appVersion}</span>
-        {:else}
-          <span class="version-dot"></span>
+  <nav class="nav-scroll">
+    <!-- Section: General -->
+    {#if !collapsed}
+      <div class="nav-section-title">GÉNÉRAL</div>
+    {/if}
+    {#each topItems as item}
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div
+        class="nav-item"
+        class:active={$currentPage === item.path}
+        title={collapsed ? item.label : ''}
+        on:click={() => navigate(item.path)}
+      >
+        <span class="nav-emoji">{item.emoji}</span>
+        {#if !collapsed}
+          <span class="nav-label">{item.label}</span>
+        {/if}
+        {#if item.key === 'tasks' && overdueCount > 0}
+          <span class="overdue-badge">{overdueCount}</span>
         {/if}
       </div>
-    </nav>
+    {/each}
+
+    <!-- Section: Modules -->
+    {#if !collapsed}
+      <div class="nav-section-title">MODULES</div>
+    {:else}
+      <div class="nav-divider"></div>
+    {/if}
+    {#each moduleItems as item}
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div
+        class="nav-item"
+        class:active={$currentPage === item.path}
+        title={collapsed ? item.label : ''}
+        on:click={() => navigate(item.path)}
+      >
+        <span class="nav-emoji">{item.emoji}</span>
+        {#if !collapsed}
+          <span class="nav-label">{item.label}</span>
+        {/if}
+      </div>
+    {/each}
+  </nav>
+
+  <!-- Bottom: Tools + Settings -->
+  <div class="nav-bottom">
+    <div class="nav-divider"></div>
+    {#each bottomItems as item}
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div
+        class="nav-item"
+        class:active={$currentPage === item.path}
+        title={collapsed ? item.label : ''}
+        on:click={() => navigate(item.path)}
+      >
+        <span class="nav-emoji">{item.emoji}</span>
+        {#if !collapsed}
+          <span class="nav-label">{item.label}</span>
+        {/if}
+      </div>
+    {/each}
+    <div class="version-info">
+      {#if !collapsed}
+        <span>v{appVersion}</span>
+      {:else}
+        <span class="version-dot"></span>
+      {/if}
+    </div>
   </div>
 </aside>
 
 <style>
   .sidebar {
-    width: var(--sidebar-width-collapsed);
-    min-width: var(--sidebar-width-collapsed);
+    width: var(--sidebar-width-expanded);
+    min-width: var(--sidebar-width-expanded);
     height: 100vh;
     background: var(--bg-sidebar);
     border-right: 1px solid var(--border-subtle);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
-    transition: width 220ms cubic-bezier(0.4, 0, 0.2, 1),
-                min-width 220ms cubic-bezier(0.4, 0, 0.2, 1);
-    overflow: hidden;
     display: flex;
     flex-direction: column;
     z-index: 100;
     user-select: none;
+    transition: width 250ms ease, min-width 250ms ease;
+    overflow: hidden;
   }
 
-  .sidebar.expanded {
-    width: var(--sidebar-width-expanded);
-    min-width: var(--sidebar-width-expanded);
-  }
-
-  .sidebar-inner {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    padding: 8px;
+  .sidebar.collapsed {
+    width: var(--sidebar-width-collapsed);
+    min-width: var(--sidebar-width-collapsed);
   }
 
   /* Brand */
   .brand {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 12px 8px;
-    margin-bottom: 8px;
-    white-space: nowrap;
-    overflow: hidden;
+    gap: 12px;
+    padding: 16px 16px 12px;
+    border-bottom: 1px solid var(--border-subtle);
+    flex-shrink: 0;
   }
 
   .brand-logo {
-    width: 30px;
-    height: 30px;
+    width: 36px;
+    height: 36px;
     object-fit: contain;
+    border-radius: 8px;
     flex-shrink: 0;
-    border-radius: 6px;
   }
 
-  .brand-icon {
-    font-size: 22px;
-    flex-shrink: 0;
-    width: 30px;
-    text-align: center;
-  }
-
-  .brand-text {
-    font-size: 16px;
-    font-weight: 600;
-    color: var(--text-primary);
+  .brand-name {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-heading);
     letter-spacing: -0.3px;
-    opacity: 0;
-    animation: fadeLabel 180ms ease forwards;
+    white-space: nowrap;
+  }
+
+  .collapse-btn {
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+  .collapse-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+
+  .collapsed .brand {
+    justify-content: center;
+    padding: 16px 8px 12px;
+    gap: 0;
+  }
+  .collapsed .collapse-btn {
+    margin-left: 0;
   }
 
   /* Navigation */
-  .nav-main {
+  .nav-scroll {
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
+    padding: 8px;
   }
 
-  .nav-bottom {
-    margin-top: auto;
-    padding-top: 8px;
-    border-top: 1px solid var(--border-subtle);
+  .nav-section-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    letter-spacing: 1px;
+    padding: 16px 12px 6px;
+    text-transform: uppercase;
+  }
+
+  .nav-divider {
+    height: 1px;
+    background: var(--border-subtle);
+    margin: 8px 12px;
   }
 
   .nav-item {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 9px 10px;
+    gap: 12px;
+    padding: 10px 12px;
     margin: 2px 0;
-    border-radius: 10px;
+    border-radius: 0.5rem;
     cursor: pointer;
     white-space: nowrap;
     overflow: hidden;
-    transition: background 0.15s ease, box-shadow 0.15s ease;
+    transition: all 0.15s;
     position: relative;
+    color: var(--text-secondary);
   }
 
   .nav-item:hover {
     background: var(--bg-hover);
+    color: var(--text-primary);
   }
 
   .nav-item.active {
-    background: rgba(var(--accent-rgb), 0.15);
-    box-shadow: 0 0 12px rgba(var(--accent-rgb), 0.2);
+    background: rgba(var(--primary-rgb), 0.15);
+    color: var(--accent);
   }
 
   .nav-item.active::before {
     content: '';
     position: absolute;
-    left: -8px;
-    top: 4px;
-    bottom: 4px;
+    left: 0;
+    top: 6px;
+    bottom: 6px;
     width: 3px;
     background: var(--accent);
     border-radius: 0 3px 3px 0;
-    box-shadow: 0 0 8px rgba(var(--accent-rgb), 0.5);
-  }
-
-  .nav-item.active .nav-emoji {
-    filter: drop-shadow(0 0 4px rgba(var(--accent-rgb), 0.5));
-  }
-
-  .nav-item.active .nav-label {
-    color: var(--accent);
-    font-weight: 500;
   }
 
   .nav-emoji {
@@ -241,41 +275,26 @@
   }
 
   .nav-label {
-    font-size: 13.5px;
-    color: var(--text-secondary);
-    opacity: 0;
-    animation: fadeLabel 180ms ease forwards;
+    font-size: 14px;
+    font-weight: 500;
   }
 
-  .separator {
-    height: 1px;
-    background: var(--border-subtle);
-    margin: 8px 10px;
+  .nav-item.active .nav-label {
+    font-weight: 600;
   }
 
-  /* Version */
-  .version {
-    display: flex;
-    align-items: center;
+  /* Collapsed alignment */
+  .collapsed .nav-item {
     justify-content: center;
-    padding: 10px 0 4px;
-    font-size: 11px;
-    color: var(--text-muted);
+    padding: 10px 8px;
   }
-
-  .version-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--text-muted);
-    opacity: 0.5;
-  }
+  .collapsed .nav-section-title { display: none; }
 
   /* Overdue badge */
   .overdue-badge {
     position: absolute;
-    top: 4px; right: 4px;
-    background: #EF4444;
+    top: 4px; right: 6px;
+    background: var(--danger);
     color: #fff;
     font-size: 10px;
     font-weight: 700;
@@ -286,7 +305,7 @@
     align-items: center;
     justify-content: center;
     padding: 0 4px;
-    box-shadow: 0 0 6px rgba(239,68,68,0.4);
+    box-shadow: 0 0 6px rgba(255, 94, 94, 0.4);
     animation: badgePulse 2s ease-in-out infinite;
   }
   @keyframes badgePulse {
@@ -294,14 +313,26 @@
     50% { transform: scale(1.1); }
   }
 
-  @keyframes fadeLabel {
-    from {
-      opacity: 0;
-      transform: translateX(-4px);
-    }
-    to {
-      opacity: 1;
-      transform: translateX(0);
-    }
+  /* Bottom nav */
+  .nav-bottom {
+    flex-shrink: 0;
+    padding: 0 8px 8px;
+  }
+
+  .version-info {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 0 4px;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .version-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    opacity: 0.5;
   }
 </style>
