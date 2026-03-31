@@ -1,63 +1,81 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
+/* ═══════════════════════════════════════════════
+   DARK THEME (default) — inspired by YashAdmin Dark
+   ═══════════════════════════════════════════════ */
 :root {
   color-scheme: dark;
-  --bg-base: #070B14;
-  --bg-card: rgba(14, 20, 36, 0.78);
-  --bg-card-solid: #0E1424;
-  --bg-sidebar: rgba(7, 11, 20, 0.90);
-  --bg-hover: rgba(255, 255, 255, 0.04);
-  --border-subtle: rgba(255, 255, 255, 0.08);
-  --border-hover: rgba(255, 255, 255, 0.14);
-  --text-primary: rgba(226, 232, 240, 0.92);
-  --text-secondary: rgba(148, 163, 184, 0.85);
-  --text-muted: rgba(148, 163, 184, 0.7);
-  --accent: #06A6C9;
-  --accent-rgb: 6, 166, 201;
-  --accent-glow: rgba(6, 166, 201, 0.3);
-  --success: #22C55E;
-  --warning: #F59E0B;
-  --danger: #EF4444;
-  --info: #3B82F6;
-
-  /* Extra colors for theme adaptability */
+  /* Backgrounds — solid navy (YashAdmin style) */
+  --bg-base: #151C2C;
+  --bg-card: #182237;
+  --bg-card-solid: #182237;
+  --bg-sidebar: #182237;
+  --bg-hover: rgba(255, 255, 255, 0.06);
+  /* Borders */
+  --border-subtle: rgba(255, 255, 255, 0.1);
+  --border-hover: rgba(255, 255, 255, 0.18);
+  /* Text */
+  --text-primary: #C8CDD8;
+  --text-secondary: #828690;
+  --text-muted: #6C7080;
   --text-on-card: #fff;
-  --text-heading: #e2e8f0;
-  --bg-input: rgba(255, 255, 255, 0.05);
-  --bg-input-solid: #0E1424;
-  --bg-dialog: #0E1424;
+  --text-heading: #ffffff;
+  /* Accent — YashAdmin purple + gold */
+  --primary: #452B90;
+  --primary-rgb: 69, 43, 144;
+  --secondary: #F8B940;
+  --secondary-rgb: 248, 185, 64;
+  --accent: #452B90;
+  --accent-rgb: 69, 43, 144;
+  --accent-glow: rgba(69, 43, 144, 0.3);
+  /* Status colors */
+  --success: #3A9B94;
+  --warning: #FF9F00;
+  --danger: #FF5E5E;
+  --info: #58bad7;
+  /* Input & dialog */
+  --bg-input: rgba(255, 255, 255, 0.06);
+  --bg-input-solid: #151C2C;
+  --bg-dialog: #182237;
   --bg-badge: rgba(255, 255, 255, 0.08);
   --shadow-soft: rgba(0, 0, 0, 0.3);
+  /* Overlays */
   --overlay-white-5: rgba(255, 255, 255, 0.05);
   --overlay-white-8: rgba(255, 255, 255, 0.08);
   --overlay-white-10: rgba(255, 255, 255, 0.1);
   --overlay-white-15: rgba(255, 255, 255, 0.15);
   --scrollbar-thumb: rgba(255, 255, 255, 0.1);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.2);
-
   /* Sidebar */
   --sidebar-width-collapsed: 62px;
-  --sidebar-width-expanded: 216px;
+  --sidebar-width-expanded: 240px;
 }
 
 /* ═══════════════════════════════════════════════
-   GLASS LIGHT THEME OVERRIDES
+   LIGHT THEME — inspired by YashAdmin Light
    ═══════════════════════════════════════════════ */
 [data-theme="glass-light"] {
   color-scheme: light;
-  --bg-base: #E8ECF2;
-  --bg-card: rgba(255, 255, 255, 0.72);
-  --bg-card-solid: #F5F7FA;
-  --bg-sidebar: rgba(240, 243, 248, 0.92);
+  --bg-base: #F3F0EC;
+  --bg-card: #FFFFFF;
+  --bg-card-solid: #FFFFFF;
+  --bg-sidebar: #FFFFFF;
   --bg-hover: rgba(0, 0, 0, 0.04);
-  --border-subtle: rgba(0, 0, 0, 0.08);
-  --border-hover: rgba(0, 0, 0, 0.14);
-  --text-primary: rgba(15, 23, 42, 0.92);
-  --text-secondary: rgba(51, 65, 85, 0.85);
-  --text-muted: rgba(100, 116, 139, 0.7);
-  --text-on-card: #1e293b;
-  --text-heading: #0f172a;
-  --bg-input: rgba(0, 0, 0, 0.04);
+  --border-subtle: rgba(0, 0, 0, 0.1);
+  --border-hover: rgba(0, 0, 0, 0.18);
+  --text-primary: #374557;
+  --text-secondary: #6e7687;
+  --text-muted: #888888;
+  --text-on-card: #374557;
+  --text-heading: #374557;
+  --primary: #452B90;
+  --primary-rgb: 69, 43, 144;
+  --secondary: #F8B940;
+  --secondary-rgb: 248, 185, 64;
+  --accent: #452B90;
+  --accent-rgb: 69, 43, 144;
+  --bg-input: rgba(0, 0, 0, 0.03);
   --bg-input-solid: #ffffff;
   --bg-dialog: #ffffff;
   --bg-badge: rgba(0, 0, 0, 0.06);
@@ -71,7 +89,7 @@
 }
 
 [data-theme="glass-light"] body {
-  background: #E8ECF2;
+  background: #F3F0EC;
 }
 
 /* Light theme: fix ALL hardcoded white text/colors */
@@ -357,7 +375,7 @@
 /* Body & html in light mode */
 [data-theme="glass-light"],
 [data-theme="glass-light"] body {
-  background: #E8ECF2 !important;
+  background: #F3F0EC !important;
 }
 
 /* Splash screen — keep dark in light mode */
@@ -373,9 +391,9 @@
 }
 
 html, body {
-  background: #070B14;
+  background: var(--bg-base);
   color: var(--text-primary);
-  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-family: 'Poppins', 'Segoe UI', system-ui, -apple-system, sans-serif;
   overflow: hidden;
   height: 100vh;
 }
@@ -389,14 +407,12 @@ html, body {
   z-index: 1;
 }
 
-/* Glass card utility */
+/* Card utility (solid backgrounds, YashAdmin style) */
 .glass-card {
   background: var(--bg-card);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--border-subtle);
-  border-radius: 16px;
-  transition: border-color 0.2s ease;
+  border-radius: 0.75rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .glass-card:hover {
@@ -421,10 +437,10 @@ html, body {
   background: rgba(255, 255, 255, 0.2);
 }
 
-/* Global form elements — dark theme for native controls */
+/* Global form elements */
 select,
 select option {
-  background: #0E1424;
+  background: var(--bg-card-solid);
   color: var(--text-primary);
   border: 1px solid var(--border-subtle);
 }
@@ -436,8 +452,8 @@ select:focus {
 }
 
 select option {
-  background: #0E1424;
-  color: #e2e8f0;
+  background: var(--bg-card-solid);
+  color: var(--text-primary);
   padding: 8px 12px;
 }
 
