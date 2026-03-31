@@ -244,11 +244,11 @@
     if (themeName === 'glass-light') {
       root.setAttribute('data-theme', 'glass-light');
       root.style.colorScheme = 'light';
-      document.body.style.background = '#E8ECF2';
+      document.body.style.background = '#F3F0EC';
     } else {
       root.removeAttribute('data-theme');
       root.style.colorScheme = 'dark';
-      document.body.style.background = '#070B14';
+      document.body.style.background = '#151C2C';
     }
     // Reset inline overrides — let CSS variables from app.css handle it
     const varProps = ['--bg-base','--bg-card','--bg-card-solid','--bg-sidebar','--bg-hover',

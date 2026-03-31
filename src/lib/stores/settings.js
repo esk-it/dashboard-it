@@ -35,7 +35,7 @@ export async function loadSettings() {
     if (theme?.theme === 'glass-light') {
       document.documentElement.setAttribute('data-theme', 'glass-light');
       document.documentElement.style.colorScheme = 'light';
-      document.body.style.background = '#E8ECF2';
+      document.body.style.background = '#F3F0EC';
     } else {
       document.documentElement.removeAttribute('data-theme');
     }

@@ -13,7 +13,7 @@
       const { getVersion } = await import('@tauri-apps/api/app');
       appVersion = await getVersion();
     } catch {
-      appVersion = '4.0.1';
+      appVersion = '4.1.0';
     }
     loadOverdueCount();
     interval = setInterval(loadOverdueCount, 60000);
@@ -36,7 +36,7 @@
 
   // Split nav items into sections
   $: topItems = navItems.filter(item => !item.bottom && item.type !== 'separator' && ['home','news','planning','tasks','documents'].includes(item.key));
-  $: moduleItems = navItems.filter(item => !item.bottom && item.type !== 'separator' && ['suppliers','parc','security','wiki','changelog','monitoring','launcher'].includes(item.key));
+  $: moduleItems = navItems.filter(item => !item.bottom && item.type !== 'separator' && !['home','news','planning','tasks','documents'].includes(item.key));
   $: bottomItems = navItems.filter(item => item.bottom);
 </script>
 
